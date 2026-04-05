@@ -1,6 +1,6 @@
 # Squeezie
 
-ESP32-S3-basierte Fernsteuerung für einen Squeezebox/Lyrion-Medienserver mit ILI9488 3,5" Touchdisplay.
+ESP32-S3-basierte Fernsteuerung für einen Lyrion/Squeezebox-Medienserver mit ILI9488 3,5" Touchdisplay.
 
 ## Hardware
 
@@ -37,8 +37,8 @@ Das Display-Modul hat 14 Pins. Display-SPI und Touch-SPI teilen sich MOSI, MISO 
 ## Software-Einrichtung
 
 ### Voraussetzungen
+
 - [PlatformIO](https://platformio.org/) (VSCodium/VSCode Extension oder CLI)
-- [cspell](https://cspell.org/) Extension für Rechtschreibprüfung (optional)
 
 ### Erstmalige Einrichtung
 
@@ -46,39 +46,61 @@ Das Display-Modul hat 14 Pins. Display-SPI und Touch-SPI teilen sich MOSI, MISO 
 # Bibliotheken installieren und kompilieren
 pio run
 
-# Auf den ESP32 flashen (USB angeschlossen, /dev/ttyACM0)
+# Auf den ESP32 flashen (USB angeschlossen)
 pio run --target upload
 
 # Serielle Konsole öffnen
 pio device monitor
 ```
 
+### WLAN-Konfiguration
+
+Beim ersten Start öffnet das Gerät einen Access Point **Squeezie-Setup**. Im Browser
+`192.168.4.1` aufrufen und WLAN-Zugangsdaten eingeben. Nach dem Verbinden mit dem
+Heimnetz erscheint die IP-Adresse auf dem Display.
+
 ### Touch-Kalibrierung
 
-Beim allerersten Start erscheint automatisch die Kalibrierung. Es werden 5 Kreuzmarkierungen
+Beim allerersten Start erscheint automatisch die Kalibrierung. Es werden 3 Kreuzmarkierungen
 nacheinander angezeigt, die mit dem Finger berührt werden müssen.
 
 Die Kalibrierungsdaten werden im NVS (Flash) gespeichert und bei jedem Neustart geladen.
 
-**Neu kalibrieren:** Button 3 auf dem Demo-Bildschirm 3 Sekunden gedrückt halten.
+**Neu kalibrieren:** Obere linke Ecke des Displays 3 Sekunden gedrückt halten.
 
-## Aktueller Stand
+## Aktueller Stand — v0.3.2
 
-### v0.1.0 — Display-Demo
-- ILI9488 Display-Initialisierung
-- Touch-Kalibrierung mit NVS-Speicherung
-- Demo-Bildschirm: Farbbalken, Systeminfo, Touch-Buttons mit Koordinatenanzeige
+### Player-Screen (Touch-Display)
+
+- **Cover-Art** (128×128 px, vom LMS-Server geladen)
+- **Titelanzeige**: Titel (scrollend), Interpret, Album, Tracknummer / Gesamtdauer
+- **Fortschrittsbalken** mit Zeitanzeige, antippen zum Seekten
+- **Transport-Buttons**: |< / Pause/Play / >|
+- **Lautstärke**: Balken mit [−] / [+], Halten wiederholt
+- **Modus-Buttons**: Wiederholen (aus / Titel / Liste) und Zufall (an/aus)
+- **Uhrzeit** (NTP) in der Statuszeile
+- **Einstellungs-Screen**: Server-Suche per UDP-Discovery, Player-Auswahl
+
+### Webinterface (Browser)
+
+- **Player-Steuerung** (`http://<ip>/`): Titel, Cover, Fortschrittsbalken, Transport, Lautstärke, Modus
+- **Einstellungen** (`/settings`): WLAN, Netzwerk (DHCP/Statisch), NTP, Squeezebox-Server, Player-Auswahl
+- **OTA-Firmware-Update** (`/update`)
+- **Log** (`/log`): Ring-Buffer mit den letzten 20 Systemereignissen
+
+### Technisches
+
+- **Lyrion/Squeezebox JSON-RPC API**: Play/Pause/Next/Prev/Seek/Lautstärke/Wiederholen/Zufall
+- **Server-Discovery**: UDP-Broadcast auf Port 3483, TCP-Portscan als Fallback
+- **NVS-Persistenz**: alle Einstellungen überleben einen Neustart
+- **Cover-Download**: asynchroner FreeRTOS-Task (blockiert die Main-Loop nicht)
+- **Selektives Display-Rendering**: nur geänderte Felder werden neu gezeichnet
 
 ## Geplante Funktionen
 
-- [ ] WLAN-Verbindung mit Konfigurationsportal (WiFiManager oder Custom)
-- [ ] Webinterface für Grundeinstellungen (IP, NTP, Squeezebox-Server)
-- [ ] Lyrion/Squeezebox Server-API (JSON-RPC)
-- [ ] Playersteuerung über Touchdisplay (Play/Pause, Vor/Zurück, Lautstärke)
-- [ ] Titelanzeige mit Albumcover, scrollender Text
-- [ ] OTA-Updates
 - [ ] IR-Fernbedienung (Hardware-Erweiterung)
 
 ## Lizenz
 
-Privates Projekt — kein öffentliches Lizenzmodell.
+[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) — Namensnennung,
+nicht-kommerziell, Weitergabe unter gleichen Bedingungen.
