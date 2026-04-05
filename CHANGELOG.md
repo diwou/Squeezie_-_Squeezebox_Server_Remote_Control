@@ -9,6 +9,9 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 ## [0.3.2] — 2026-04-05
 
 ### Hinzugefügt
+- **Factory Reset via BOOT-Button**: BOOT-Button (GPIO 0) 10 Sekunden gehalten → roter
+  Countdown-Screen, anschließend alle NVS-Einstellungen löschen und Neustart; loslassen
+  bricht ab und stellt den Player-Screen wieder her
 - **Einstellungs-Screen**: EINST.-Button öffnet jetzt einen dedizierten Screen statt des
   IP-Popups — Server-Auswahl per UDP-Discovery (SUCHEN-Button), gefundenen Server übernehmen,
   Player-Liste vom Server laden und aktiven Player auswählen; Änderungen werden sofort in NVS

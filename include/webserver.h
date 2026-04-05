@@ -22,3 +22,6 @@ void                  wifiSetPlayer(const String& mac);                 // setzt
 
 // Webserver-Log (Ring-Buffer, abrufbar unter /log)
 void                  srvLog(const char* fmt, ...);
+
+// NVS komplett löschen und neu starten (Factory Reset)
+void                  wifiFactoryReset();

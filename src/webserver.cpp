@@ -81,6 +81,11 @@ static void saveSrvCfg() {
     p.end();
 }
 
+void wifiFactoryReset() {
+    Preferences p; p.begin(NVS_NAMESPACE, false); p.clear(); p.end();
+    ESP.restart();
+}
+
 // ─── WiFi ────────────────────────────────────────────────────────────────────
 
 static void startAP() {

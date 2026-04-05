@@ -22,6 +22,9 @@ void displayHandleTouch();
 // OTA-Fortschritt anzeigen (0–100); ruft bei 100 "Neustart..." an
 void displayShowOTA(int pct);
 
+// Factory-Reset-Warnung: secsLeft = verbleibende Sekunden (10..1), 0 = wird ausgeführt
+void displayShowFactoryReset(uint8_t secsLeft);
+
 // Cover-Puffer (PSRAM) für /api/cover — nullptr wenn noch kein Cover geladen
 const uint8_t* displayGetCoverBuf();
 size_t         displayGetCoverLen();

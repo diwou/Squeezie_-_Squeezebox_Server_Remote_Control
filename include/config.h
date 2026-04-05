@@ -8,6 +8,7 @@
 #define PIN_TFT_BL      7   // Hintergrundbeleuchtung (HIGH = an)
 #define PIN_TOUCH_CS    4   // Touch Chip-Select (TCS)
 #define PIN_TOUCH_IRQ   5   // Touch-Interrupt (PEN, LOW = berührt, nicht angeschlossen)
+#define PIN_BOOT_BTN    0   // Eingebauter BOOT-Button (LOW = gedrückt)
 
 // --- Display ---
 #define DISPLAY_ROTATION    1   // 1 = Querformat: 480×320

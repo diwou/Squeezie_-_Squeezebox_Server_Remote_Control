@@ -1288,6 +1288,40 @@ void displayShowOTA(int pct) {
     }
 }
 
+// ─── Factory-Reset-Warnung ────────────────────────────────────────────────────
+
+void displayShowFactoryReset(uint8_t secsLeft) {
+    g_screen = SCREEN_STARTUP; // verhindert displayUpdatePlayer() im Loop
+    static uint8_t lastSecs = 255;
+    if (secsLeft == lastSecs) return; // nur neu zeichnen wenn sich der Countdown ändert
+    lastSecs = secsLeft;
+
+    tft.fillScreen(COL_BG);
+    tft.setTextDatum(MC_DATUM);
+    tft.setFont(nullptr);
+
+    tft.setTextColor((uint32_t)0xFF2200, COL_BG);
+    tft.setTextSize(3);
+    tft.drawString("FACTORY RESET", DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 2 - 60);
+
+    if (secsLeft == 0) {
+        tft.setTextColor(COL_LGREY, COL_BG);
+        tft.setTextSize(2);
+        tft.drawString("Alle Einstellungen werden", DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 2 - 10);
+        tft.drawString("geloescht...", DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 2 + 20);
+        lastSecs = 255; // nächsten Aufruf wieder frisch zeichnen lassen
+    } else {
+        char buf[24];
+        snprintf(buf, sizeof(buf), "In %d Sekunde%s...", secsLeft, secsLeft == 1 ? "" : "n");
+        tft.setTextColor(COL_WHITE, COL_BG);
+        tft.setTextSize(2);
+        tft.drawString(buf, DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 2 - 10);
+        tft.setTextColor(COL_MGREY, COL_BG);
+        tft.setTextSize(1);
+        tft.drawString("BOOT loslassen zum Abbrechen", DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 2 + 30);
+    }
+}
+
 // ─── Touch-Behandlung ────────────────────────────────────────────────────────
 
 void displayHandleTouch() {
