@@ -8,8 +8,23 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 
 ## [0.3.2] — 2026-04-05
 
+### Behoben
+- **Lautstärke-Anzeige: Level 16% wurde übersprungen**: Ganzzahl-Division in
+  `(volume - 6) * 100 / 94` rundet immer ab, wodurch Lautstärke 16% nie erreichbar war
+  (Sequenz: …14, 17…). Ersetzt durch `roundf()` — alle Level 0–100% werden jetzt erreicht.
+- **Webinterface: Cover-Aktualisierung per Ajax**: Cover wurde nach dem ersten Laden nicht mehr
+  aktualisiert, weil die API immer `/api/cover` (unveränderter URL) zurückgab. Jetzt enthält die
+  URL einen Cover-Versions-Counter (`/api/cover?v=N`), der bei jedem Track-Wechsel hochzählt —
+  der Browser erkennt die neue URL und lädt das Bild zuverlässig neu.
+- **OTA-Upload: langsam und Abbruch**: `displayShowOTA()` wurde bei jedem TCP-Chunk (~1000×
+  bei 1,5 MB Firmware) aufgerufen und blockierte den async-TCP-Callback mit SPI-Display-
+  Operationen so lange, dass der Browser einen Timeout produzierte. Display-Update jetzt
+  auf maximal einmal pro Prozentpunkt gedrosselt.
+
+## [0.3.2-prev] — 2026-04-05
+
 ### Hinzugefügt
-- **Factory Reset via BOOT-Button**: BOOT-Button (GPIO 0) 10 Sekunden gehalten → roter
+- **Im Web**: BOOT-Button (GPIO 0) 10 Sekunden gehalten → roter
   Countdown-Screen, anschließend alle NVS-Einstellungen löschen und Neustart; loslassen
   bricht ab und stellt den Player-Screen wieder her
 - **Einstellungs-Screen**: EINST.-Button öffnet jetzt einen dedizierten Screen statt des

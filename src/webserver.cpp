@@ -37,8 +37,11 @@ static uint32_t         g_lastPoll    = 0;
 static uint32_t         g_reconnectAt = 0;
 static SqueezieStatus   g_status;
 static SemaphoreHandle_t g_statusMux   = nullptr; // schützt g_status (Core0↔Core1)
+static uint32_t          g_coverVersion = 0;       // zählt bei jedem Cover-Wechsel hoch
+static String            g_lastCoverUrl;           // letzter bekannter Cover-URL (Poll-Task)
 static volatile bool     g_forceRepoll = false;   // sofortiger Re-Poll nach Steuerbefehl
 static volatile bool     g_otaActive   = false;   // lmsPoll + Cover-DL pausieren während OTA
+static int               g_lastOtaPct  = -1;      // Throttle: Display nur bei %-Änderung
 
 // ─── Konfigurationsstrukturen ────────────────────────────────────────────────
 
@@ -648,6 +651,7 @@ fetch('/api/config').then(function(r){return r.json();}).then(function(d){
 static String statusToJson() {
     xSemaphoreTake(g_statusMux, portMAX_DELAY);
     SqueezieStatus s = g_status;
+    uint32_t coverV = g_coverVersion;
     xSemaphoreGive(g_statusMux);
     JsonDocument doc;
     doc["playing"]    = s.playing;
@@ -661,7 +665,7 @@ static String statusToJson() {
     doc["repeatMode"] = s.repeatMode;
     doc["shuffleMode"]= s.shuffleMode;
     doc["playerName"] = s.playerName;
-    doc["coverUrl"]   = s.coverUrl.isEmpty() ? "" : "/api/cover";
+    doc["coverUrl"]   = s.coverUrl.isEmpty() ? "" : ("/api/cover?v=" + String(coverV));
     doc["connected"]  = (g_wifiState == WIFI_STATE_CONNECTED);
     String out; serializeJson(doc, out);
     return out;
@@ -879,15 +883,21 @@ static void setupRoutes() {
         },
         [](AsyncWebServerRequest* req, String filename, size_t index, uint8_t* data, size_t len, bool final) {
             if (!index) {
-                g_otaActive = true;
+                g_otaActive  = true;
+                g_lastOtaPct = -1;
                 srvLog("[OTA] %s", filename.c_str());
                 Update.begin(UPDATE_SIZE_UNKNOWN);
                 displayShowOTA(0);
             }
             if (!Update.hasError()) {
                 Update.write(data, len);
-                if (req->contentLength() > 0)
-                    displayShowOTA((int)((index + len) * 100 / req->contentLength()));
+                if (req->contentLength() > 0) {
+                    int pct = (int)((index + len) * 100 / req->contentLength());
+                    if (pct != g_lastOtaPct) {
+                        g_lastOtaPct = pct;
+                        displayShowOTA(pct);
+                    }
+                }
             }
             if (final) {
                 if (Update.end(true)) {
@@ -938,6 +948,10 @@ void webserverInit() {
                 if (squeezeGetStatus(g_srv.playerMac, tmp)) {
                     xSemaphoreTake(g_statusMux, portMAX_DELAY);
                     g_status = tmp;
+                    if (tmp.coverUrl != g_lastCoverUrl) {
+                        g_lastCoverUrl = tmp.coverUrl;
+                        g_coverVersion++;
+                    }
                     xSemaphoreGive(g_statusMux);
                     if (!g_otaActive) {
                         displayPreloadCover(tmp.coverUrl);

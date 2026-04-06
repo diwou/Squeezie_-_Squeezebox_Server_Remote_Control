@@ -164,7 +164,7 @@
     "acquiren",
     "resetten",
     "tnow", "punkt",
-    "println",
+    "println", "roundf",
     "Wiederholung",
 
     // ── Deutsche Komposita / Fachbegriffe ─────────────────────────────────
@@ -212,7 +212,8 @@
     "reconnecten", "invalidiert",
     "Kolon", "Kolons", "VEML",
     "Zifferblöcken", "Zifferpaaren",
-    "kantenbündig", "Überlapp", "Flacker"
+    "kantenbündig", "Überlapp", "Flacker",
+    "hochzählt", "Versions-Counter"
   ],
   "ignorePaths": [
     ".pio/**",

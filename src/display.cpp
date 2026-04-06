@@ -629,7 +629,7 @@ static void drawVolumeButtons() {
 
 static void drawVolumeRow(int volume) {
     int y = PL_VOL_Y, h = PL_VOL_H;
-    int real_pct = (volume <= 6) ? 0 : constrain((volume - 6) * 100 / 94, 0, 100);
+    int real_pct = (volume <= 6) ? 0 : constrain((int)roundf((volume - 6) * 100.0f / 94.0f), 0, 100);
     int bx = 48, bw = DISPLAY_WIDTH - 96;
     int filled = constrain(real_pct * bw / 100, 0, bw);
 
