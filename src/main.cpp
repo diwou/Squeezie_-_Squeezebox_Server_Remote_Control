@@ -53,10 +53,8 @@ void setup() {
 
     String ip = wifiGetIP();
     srvLog("[Squeezie] IP: %s", ip.c_str());
-    displayShowStartup("v" APP_VERSION, ip.c_str());
-    delay(1500);
-
     displayDrawPlayerScreen();             // Player-Screen aktivieren
+    wifiPollNow();                         // ersten LMS-Status + Cover sofort anstossen
 }
 
 void loop() {

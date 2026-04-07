@@ -110,7 +110,10 @@ static volatile uint32_t g_coverGen      = 0;
 static volatile uint32_t g_dlGen         = 0;
 static volatile uint32_t g_coverSerial   = 0;
 static String            g_pendingCoverUrl;
+static String            g_pendingCoverKey;
 static String            g_dispatchedCoverUrl;
+static String            g_dispatchedCoverKey;
+static String            g_loadedCoverKey;
 static TaskHandle_t      g_coverTask     = nullptr;
 static SemaphoreHandle_t g_coverMux      = nullptr;
 
@@ -128,6 +131,32 @@ static String            g_pfQueueKeys[SQUEEZE_PREFETCH];
 static int               g_pfQueueCount  = 0;
 static SemaphoreHandle_t g_pfMux         = nullptr;
 static TaskHandle_t      g_pfTask        = nullptr;
+
+static bool isCompleteJpeg(const uint8_t* buf, size_t len) {
+    return buf && len >= 4
+           && buf[0] == 0xFF && buf[1] == 0xD8
+           && buf[len - 2] == 0xFF && buf[len - 1] == 0xD9;
+}
+
+static size_t readHttpBody(HTTPClient& http, uint8_t* buf, size_t maxLen, uint32_t timeoutMs) {
+    WiFiClient* s = http.getStreamPtr();
+    int contentLen = http.getSize();
+    size_t expected = (contentLen > 0) ? min((size_t)contentLen, maxLen) : 0;
+    size_t total = 0;
+    uint32_t t0 = millis();
+    while ((contentLen > 0 ? total < expected : (http.connected() || s->available()))
+           && total < maxLen
+           && millis() - t0 < timeoutMs) {
+        size_t av = s->available();
+        if (av) {
+            total += s->readBytes(buf + total, min(av, maxLen - total));
+            if (contentLen > 0 && total >= expected) break;
+        } else {
+            vTaskDelay(1);
+        }
+    }
+    return total;
+}
 
 // Rohwert-Lesung (ohne Kalibrierung)
 static bool xpt2046ReadRaw(int32_t* rx, int32_t* ry) {
@@ -431,7 +460,7 @@ void displayInit() {
             if (f) {
                 size_t n = f.read(g_coverBuf, 131070);
                 f.close();
-                bool valid = (n >= 2 && g_coverBuf[0] == 0xFF && g_coverBuf[1] == 0xD8);
+                bool valid = isCompleteJpeg(g_coverBuf, n);
                 if (valid) {
                     g_coverLen = n;
                     g_coverReady = true;
@@ -824,9 +853,11 @@ static void drawModeRow(int repeat, int shuffle) {
 static void coverDlTask(void*) {
     uint32_t myGen;
     String pendingUrl;
+    String pendingKey;
     xSemaphoreTake(g_coverMux, portMAX_DELAY);
     myGen = g_dlGen;
     pendingUrl = g_pendingCoverUrl;
+    pendingKey = g_pendingCoverKey;
     xSemaphoreGive(g_coverMux);
     size_t total = 0;
     bool jpegOk = false;
@@ -838,16 +869,8 @@ static void coverDlTask(void*) {
             int httpCode = http.GET();
             srvLog("[cover] HTTP %d", httpCode);
             if (httpCode == 200) {
-                WiFiClient* s = http.getStreamPtr();
-                uint32_t t0 = millis();
-                while ((http.connected() || s->available()) &&
-                       total < 131070 && millis() - t0 < 4000) {
-                    size_t av = s->available();
-                    if (av) total += s->readBytes(g_coverDlBuf + total,
-                                                   min(av, (size_t)(131070 - total)));
-                    else vTaskDelay(1);
-                }
-                jpegOk = (total >= 2 && g_coverDlBuf[0] == 0xFF && g_coverDlBuf[1] == 0xD8);
+                total = readHttpBody(http, g_coverDlBuf, 131070, 1200);
+                jpegOk = isCompleteJpeg(g_coverDlBuf, total);
                 srvLog("[cover] %d bytes, JPEG=%s", (int)total, jpegOk ? "ok" : "NEIN");
             }
             http.end();
@@ -861,8 +884,10 @@ static void coverDlTask(void*) {
         if (jpegOk && total > 0) {
             memcpy(g_coverBuf, g_coverDlBuf, total);
             g_coverLen = total;
+            g_loadedCoverKey = pendingKey;
         } else {
             g_coverLen = 0;
+            g_loadedCoverKey = "";
         }
         g_coverReady = true;
         g_coverSerial++;
@@ -882,7 +907,7 @@ bool displayCopyCover(std::vector<uint8_t>& out) {
     if (!g_coverMux || !g_coverBuf) return false;
     xSemaphoreTake(g_coverMux, portMAX_DELAY);
     size_t len = (size_t)g_coverLen;
-    bool valid = len >= 2;
+    bool valid = isCompleteJpeg(g_coverBuf, len);
     if (valid) {
         out.resize(len);
         memcpy(out.data(), g_coverBuf, len);
@@ -901,6 +926,9 @@ uint32_t displayGetCoverSerial() {
 
 static String g_coverDrawnForTitle; // Titel des zuletzt auf dem Display gezeichneten Covers
 static bool   g_coverPredrawn = false; // Cover in displayDrawPlayerScreen() vorgezeichnet
+static String g_coverCandidateUrl;
+static String g_coverCandidateKey;
+static uint8_t g_coverCandidateCount = 0;
 
 // ── Prefetch-Task: lädt Cover der Folgetracks sequenziell ───────────────────
 
@@ -947,21 +975,12 @@ static void prefetchTask(void*) {
         if (http.begin(url)) {
             int code = http.GET();
             if (code == 200) {
-                WiFiClient* s = http.getStreamPtr();
-                uint32_t t0 = millis();
-                while ((http.connected() || s->available()) &&
-                       total < 131070 && millis() - t0 < 4000 &&
-                       g_coverTask == nullptr) { // Abbruch wenn Haupt-Download startet
-                    size_t av = s->available();
-                    if (av) total += s->readBytes(g_pf[slot].buf + total,
-                                                   min(av, (size_t)(131070 - total)));
-                    else vTaskDelay(1);
-                }
+                total = readHttpBody(http, g_pf[slot].buf, 131070, 1200);
             }
             http.end();
         }
 
-        bool jpegOk = (total >= 2 && g_pf[slot].buf[0] == 0xFF && g_pf[slot].buf[1] == 0xD8);
+        bool jpegOk = isCompleteJpeg(g_pf[slot].buf, total);
         xSemaphoreTake(g_pfMux, portMAX_DELAY);
         if (jpegOk) {
             g_pf[slot].len   = total;
@@ -978,33 +997,19 @@ static void prefetchTask(void*) {
 
 // Aus beliebigem Task aufrufbar (z.B. lmsPoll) — befüllt Prefetch-Queue
 void displayQueuePrefetch(const String* urls, const String* keys, int count) {
-    if (!g_pfMux || count <= 0) return;
+    (void)urls;
+    (void)keys;
+    (void)count;
+    if (!g_pfMux) return;
     xSemaphoreTake(g_pfMux, portMAX_DELAY);
     g_pfQueueCount = 0;
-    for (int i = 0; i < count && i < SQUEEZE_PREFETCH; i++) {
-        if (urls[i].isEmpty()) continue;
-        String key = (keys && !keys[i].isEmpty()) ? keys[i] : urls[i];
-        // Schon vorhanden oder bereits fertig im Slot → überspringen
-        bool skip = false;
-        for (int j = 0; j < SQUEEZE_PREFETCH; j++) {
-            if (g_pf[j].ready && g_pf[j].key == key) { skip = true; break; }
-        }
-        for (int j = 0; j < g_pfQueueCount && !skip; j++) {
-            if (g_pfQueueKeys[j] == key) skip = true;
-        }
-        if (!skip) {
-            g_pfQueue[g_pfQueueCount] = urls[i];
-            g_pfQueueKeys[g_pfQueueCount] = key;
-            g_pfQueueCount++;
-        }
+    for (int i = 0; i < SQUEEZE_PREFETCH; i++) {
+        g_pf[i].ready = false;
+        g_pf[i].len = 0;
+        g_pf[i].url = "";
+        g_pf[i].key = "";
     }
-    bool needTask = (g_pfQueueCount > 0 && g_pfTask == nullptr);
     xSemaphoreGive(g_pfMux);
-    if (needTask) {
-        xTaskCreatePinnedToCore(prefetchTask, "pfetch", 8192,
-                                nullptr, 1, (TaskHandle_t*)&g_pfTask, 0);
-        srvLog("[pf] Queue: %d URLs", g_pfQueueCount);
-    }
 }
 
 // Aus beliebigem Task aufrufbar (z.B. lmsPoll auf Core 0) — startet Cover-Download sofort
@@ -1013,42 +1018,21 @@ void displayPreloadCover(const String& url, const String& cacheKey) {
     String key = cacheKey.isEmpty() ? url : cacheKey;
     xSemaphoreTake(g_coverMux, portMAX_DELAY);
     bool coverTaskRunning = (g_coverTask != nullptr);
-    bool alreadyLoaded = (g_dispatchedCoverUrl == url && g_coverLen > 0);
+    bool alreadyLoaded = (g_dispatchedCoverUrl == url && g_dispatchedCoverKey == key && g_coverLen > 0);
     xSemaphoreGive(g_coverMux);
     if (coverTaskRunning || alreadyLoaded) return; // Download läuft bereits / schon geladen
 
-    // Prefetch-Cache prüfen — Cover bereits vorhanden?
-    if (g_pfMux) {
-        xSemaphoreTake(g_pfMux, portMAX_DELAY);
-        for (int i = 0; i < SQUEEZE_PREFETCH; i++) {
-            if (g_pf[i].ready && g_pf[i].key == key && g_pf[i].len > 0) {
-                xSemaphoreTake(g_coverMux, portMAX_DELAY);
-                memcpy(g_coverBuf, g_pf[i].buf, g_pf[i].len);
-                g_coverLen           = g_pf[i].len;
-                g_dCoverUrl          = url;
-                g_dCoverKey          = key;
-                g_dispatchedCoverUrl = url;
-                g_coverReady         = true;
-                g_coverSerial++;
-                g_pf[i].ready        = false; // Slot freigeben
-                xSemaphoreGive(g_coverMux);
-                xSemaphoreGive(g_pfMux);
-                srvLog("[cover] Prefetch-Hit Slot %d: %d B", i, (int)g_coverLen);
-                return;
-            }
-        }
-        xSemaphoreGive(g_pfMux);
-    }
-
-    // Kein Cache-Hit → normaler Download
     xSemaphoreTake(g_coverMux, portMAX_DELAY);
     g_dCoverUrl          = url;
     g_dCoverKey          = key;
     g_pendingCoverUrl    = url;
+    g_pendingCoverKey    = key;
     g_dlGen              = ++g_coverGen;
     g_dispatchedCoverUrl = url;
+    g_dispatchedCoverKey = key;
     g_coverReady         = false;
     g_coverLen           = 0;
+    g_loadedCoverKey     = "";
     g_coverSerial++;
     xTaskCreatePinnedToCore(coverDlTask, "cover", 8192,
                             nullptr, 1, (TaskHandle_t*)&g_coverTask, 0);
@@ -1222,7 +1206,6 @@ static void handleSettingsTouch(int32_t tx, int32_t ty) {
 void displayDrawPlayerScreen() {
     g_screen = SCREEN_PLAYER;
     xSemaphoreTake(g_coverMux, portMAX_DELAY);
-    bool hadCover = g_coverLen > 0; // Cache oder frisch vorgeladenes Cover
 
     g_dTitle = g_dArtist = g_dAlbum = g_dCoverUrl = g_dPlayer = "";
     g_dCoverKey = "";
@@ -1234,24 +1217,17 @@ void displayDrawPlayerScreen() {
     g_scrollLast = 0;
     g_coverDrawnForTitle = "";
     g_coverPredrawn = false;
-    if (!hadCover) {
-        g_coverReady = false;
-        g_coverLen   = 0;
-    }
+    g_coverCandidateUrl = "";
+    g_coverCandidateKey = "";
+    g_coverCandidateCount = 0;
+    g_coverReady = false;
+    g_coverLen   = 0;
+    g_loadedCoverKey = "";
     xSemaphoreGive(g_coverMux);
 
     tft.fillScreen(COL_BG);
     drawPlayerHeader("Squeezie", false);
-    if (hadCover) {
-        xSemaphoreTake(g_coverMux, portMAX_DELAY);
-        g_coverReady    = false;
-        g_coverPredrawn = true;
-        drawCoverImage(g_coverBuf, g_coverLen);
-        xSemaphoreGive(g_coverMux);
-        srvLog("[cover] Preload sofort gezeichnet (%d bytes)", (int)g_coverLen);
-    } else {
-        drawCoverPlaceholder();
-    }
+    drawCoverPlaceholder();
     tft.fillRect(PL_INFO_X, PL_INFO_Y, PL_INFO_W, PL_COVER_H, COL_BG);
     drawProgressBar(0, 0);
     drawTransportButtons(false);
@@ -1269,23 +1245,31 @@ void displayUpdatePlayer() {
     xSemaphoreTake(g_coverMux, portMAX_DELAY);
     bool coverReady = g_coverReady;
     bool coverTaskRunning = (g_coverTask != nullptr);
-    bool alreadyDispatched = (g_dispatchedCoverUrl == g_dCoverUrl);
+    bool alreadyDispatched = (g_dispatchedCoverUrl == g_dCoverUrl && g_dispatchedCoverKey == g_dCoverKey);
     size_t coverLen = g_coverLen;
+    String loadedCoverKey = g_loadedCoverKey;
     xSemaphoreGive(g_coverMux);
     if (coverReady) {
         xSemaphoreTake(g_coverMux, portMAX_DELAY);
         g_coverReady = false;
-        if (g_coverLen > 0) {
+        bool keyMatches = (!s.coverKey.isEmpty() && g_loadedCoverKey == s.coverKey);
+        if (g_coverLen > 0 && keyMatches) {
             srvLog("[cover] drawJpg %d bytes", (int)g_coverLen);
             drawCoverImage(g_coverBuf, g_coverLen);
             g_coverDrawnForTitle = s.title;
+        } else if (g_coverLen > 0) {
+            srvLog("[cover] verwerfe Key-Mismatch");
+            g_coverLen = 0;
+            g_loadedCoverKey = "";
+            drawCoverPlaceholder();
         } else {
             srvLog("[cover] kein Bild, Placeholder");
             drawCoverPlaceholder();
         }
         coverTaskRunning = (g_coverTask != nullptr);
-        alreadyDispatched = (g_dispatchedCoverUrl == g_dCoverUrl);
+        alreadyDispatched = (g_dispatchedCoverUrl == g_dCoverUrl && g_dispatchedCoverKey == g_dCoverKey);
         coverLen = g_coverLen;
+        loadedCoverKey = g_loadedCoverKey;
         xSemaphoreGive(g_coverMux);
     }
 
@@ -1295,25 +1279,48 @@ void displayUpdatePlayer() {
         g_coverPredrawn = false;
     }
 
-    // Cover neu laden wenn URL oder Titel wechselt.
-    bool coverUrlChanged = (s.coverUrl != g_dCoverUrl && !s.coverUrl.isEmpty());
-    bool coverKeyChanged = (s.coverKey != g_dCoverKey && !s.coverKey.isEmpty());
-    bool titleChanged    = (!s.title.isEmpty() && s.title != g_coverDrawnForTitle);
-    if (coverUrlChanged || coverKeyChanged || (titleChanged && !coverTaskRunning)) {
-        if (coverUrlChanged) g_dCoverUrl = s.coverUrl;
-        if (coverKeyChanged) g_dCoverKey = s.coverKey;
+    // Cover neu laden wenn der LMS denselben Cover-Key in zwei Polls bestätigt.
+    bool coverUrlChanged = (s.coverUrl != g_dCoverUrl);
+    bool coverKeyChanged = (s.coverKey != g_dCoverKey);
+    bool coverChanged    = (coverUrlChanged || coverKeyChanged);
+    bool coverStable     = false;
+    if (coverChanged) {
+        if (s.coverUrl == g_coverCandidateUrl && s.coverKey == g_coverCandidateKey) {
+            if (g_coverCandidateCount < 2) g_coverCandidateCount++;
+        } else {
+            g_coverCandidateUrl = s.coverUrl;
+            g_coverCandidateKey = s.coverKey;
+            g_coverCandidateCount = 1;
+        }
+        coverStable = (g_coverCandidateCount >= 2);
+    } else {
+        g_coverCandidateUrl = "";
+        g_coverCandidateKey = "";
+        g_coverCandidateCount = 0;
+        if (!s.title.isEmpty()) g_coverDrawnForTitle = s.title;
+    }
+    if (coverChanged && coverStable) {
+        g_dCoverUrl = s.coverUrl;
+        g_dCoverKey = s.coverKey;
+        g_coverCandidateUrl = "";
+        g_coverCandidateKey = "";
+        g_coverCandidateCount = 0;
         xSemaphoreTake(g_coverMux, portMAX_DELAY);
         g_coverGen++;
         g_dispatchedCoverUrl = "";
+        g_dispatchedCoverKey = "";
         if (s.coverUrl.isEmpty()) {
             g_coverReady = false;
             g_coverLen   = 0;
+            g_loadedCoverKey = "";
             g_coverSerial++;
             xSemaphoreGive(g_coverMux);
             drawCoverPlaceholder();
+            g_coverDrawnForTitle = s.title;
         } else {
             g_coverReady = false;
             g_coverLen   = 0;
+            g_loadedCoverKey = "";
             xSemaphoreGive(g_coverMux);
             drawCoverPlaceholder();
         }
@@ -1321,50 +1328,31 @@ void displayUpdatePlayer() {
     // Download starten wenn URL gesetzt, Puffer da, kein Task läuft und noch nicht dispatcht
     xSemaphoreTake(g_coverMux, portMAX_DELAY);
     coverTaskRunning = (g_coverTask != nullptr);
-    alreadyDispatched = (g_dispatchedCoverUrl == g_dCoverUrl);
+    alreadyDispatched = (g_dispatchedCoverUrl == g_dCoverUrl && g_dispatchedCoverKey == g_dCoverKey);
     coverReady = g_coverReady;
     coverLen = g_coverLen;
+    loadedCoverKey = g_loadedCoverKey;
     xSemaphoreGive(g_coverMux);
     if (!g_dCoverUrl.isEmpty() && g_coverBuf && !coverTaskRunning && !alreadyDispatched) {
         // Bereits bereit? (Prefetch-Hit via displayPreloadCover oder Preload)
-        if (coverReady && coverLen > 0) {
+        if (coverReady && coverLen > 0 && !g_dCoverKey.isEmpty() && loadedCoverKey == g_dCoverKey) {
             xSemaphoreTake(g_coverMux, portMAX_DELAY);
             g_dispatchedCoverUrl = g_dCoverUrl; // kein Download nötig
+            g_dispatchedCoverKey = g_dCoverKey;
             xSemaphoreGive(g_coverMux);
         } else {
-            // Prefetch-Cache direkt prüfen
-            bool pfHit = false;
-            if (g_pfMux) {
-                xSemaphoreTake(g_pfMux, portMAX_DELAY);
-                String wantedKey = g_dCoverKey.isEmpty() ? g_dCoverUrl : g_dCoverKey;
-                for (int i = 0; i < SQUEEZE_PREFETCH; i++) {
-                    if (g_pf[i].ready && g_pf[i].key == wantedKey && g_pf[i].len > 0) {
-                        xSemaphoreTake(g_coverMux, portMAX_DELAY);
-                        memcpy(g_coverBuf, g_pf[i].buf, g_pf[i].len);
-                        g_coverLen           = g_pf[i].len;
-                        g_dispatchedCoverUrl = g_dCoverUrl;
-                        g_coverReady         = true;
-                        g_coverSerial++;
-                        g_pf[i].ready        = false;
-                        xSemaphoreGive(g_coverMux);
-                        pfHit                = true;
-                        srvLog("[cover] UpdatePlayer Prefetch-Hit %d B", (int)g_coverLen);
-                        break;
-                    }
-                }
-                xSemaphoreGive(g_pfMux);
-            }
-            if (!pfHit) {
-                xSemaphoreTake(g_coverMux, portMAX_DELAY);
-                g_coverReady         = false;
-                g_coverLen           = 0;
-                g_pendingCoverUrl    = g_dCoverUrl;
-                g_dlGen              = g_coverGen;
-                g_dispatchedCoverUrl = g_dCoverUrl;
-                xTaskCreatePinnedToCore(coverDlTask, "cover", 8192,
-                                        nullptr, 1, (TaskHandle_t*)&g_coverTask, 0);
-                xSemaphoreGive(g_coverMux);
-            }
+            xSemaphoreTake(g_coverMux, portMAX_DELAY);
+            g_coverReady         = false;
+            g_coverLen           = 0;
+            g_loadedCoverKey     = "";
+            g_pendingCoverUrl    = g_dCoverUrl;
+            g_pendingCoverKey    = g_dCoverKey;
+            g_dlGen              = g_coverGen;
+            g_dispatchedCoverUrl = g_dCoverUrl;
+            g_dispatchedCoverKey = g_dCoverKey;
+            xTaskCreatePinnedToCore(coverDlTask, "cover", 8192,
+                                    nullptr, 1, (TaskHandle_t*)&g_coverTask, 0);
+            xSemaphoreGive(g_coverMux);
         }
     }
 

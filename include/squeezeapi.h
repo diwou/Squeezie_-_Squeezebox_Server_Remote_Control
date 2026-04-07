@@ -18,7 +18,7 @@ struct SqueezieStatus {
     String album;
     int    trackNum    = 0;
     String coverUrl;           // Cover-URL des aktuellen Titels
-    String coverKey;           // Prefetch-/Cache-Key auf Basis der Track-Metadaten
+    String coverKey;           // Stabiler Track-Key fuer den sichtbaren Cover-Download
     int    duration    = 0;
     int    position    = 0;
     int    volume      = 0;
@@ -26,7 +26,7 @@ struct SqueezieStatus {
     int    shuffleMode = 0;   // 0=aus, 1=Titel, 2=Album
     String playerName;
     String nextCoverUrls[SQUEEZE_PREFETCH]; // Cover-URLs der nächsten Tracks
-    String nextCoverKeys[SQUEEZE_PREFETCH]; // Metadaten-Key der nächsten Tracks
+    String nextCoverKeys[SQUEEZE_PREFETCH]; // LMS-coverid der nächsten Tracks
     int    nextCount   = 0;
 };
 

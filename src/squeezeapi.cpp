@@ -51,7 +51,23 @@ static bool jsonRpc(const String& playerMac, const String& cmdJson, JsonDocument
     return !deserializeJson(resp, payload);
 }
 
-static String makeTrackCoverKey(JsonObjectConst track) {
+static String coverUrlForId(const String& coverId, int size) {
+    if (g_host.isEmpty() || coverId.isEmpty() || coverId == "0") return "";
+    return "http://" + g_host + ":" + String(g_port)
+           + "/music/" + coverId
+           + "/cover_" + String(size) + "x" + String(size) + "_f.jpg";
+}
+
+static String currentCoverUrlForPlayer(const String& playerMac, int size) {
+    if (g_host.isEmpty() || playerMac.isEmpty()) return "";
+    return "http://" + g_host + ":" + String(g_port)
+           + "/music/current/cover_" + String(size) + "x" + String(size)
+           + "_o.jpg?player=" + playerMac;
+}
+
+static String trackKey(JsonObjectConst track) {
+    String id = track["id"].as<String>();
+    if (!id.isEmpty()) return id;
     String key;
     key.reserve(160);
     key += track["title"].as<String>();
@@ -109,21 +125,16 @@ bool squeezeGetStatus(const String& playerMac, SqueezieStatus& out) {
         out.album     = t["album"].as<String>();
         out.trackNum  = t["tracknum"].as<int>();
         out.duration  = (int)t["duration"].as<float>();
-        // Aktuelles Cover immer über den LMS-"current"-Endpoint holen.
-        // So bleibt das Bild an den tatsächlich laufenden Track gebunden, auch wenn
-        // playlist_loop/coverid beim Übergang kurz asynchron zu den Track-Metadaten ist.
-        out.coverUrl = "http://" + g_host + ":" + String(g_port)
-                       + "/music/current/cover_128x128_o.jpg?player=" + playerMac;
-        out.coverKey = makeTrackCoverKey(t);
-        // Cover-URLs der Folgetracks (coverid-basiert, da "current" nur den aktuellen liefert)
+        out.coverUrl = currentCoverUrlForPlayer(playerMac, 128);
+        out.coverKey = trackKey(t);
+        // Cover-URLs der Folgetracks
         for (size_t i = 1; i < loop.size() && out.nextCount < SQUEEZE_PREFETCH; i++) {
             JsonObject nextTrack = loop[i].as<JsonObject>();
-            String cid = nextTrack["coverid"].as<String>();
-            if (!cid.isEmpty() && cid != "0") {
-                out.nextCoverUrls[out.nextCount] =
-                    "http://" + g_host + ":" + String(g_port)
-                    + "/music/" + cid + "/cover_128x128_f.jpg";
-                out.nextCoverKeys[out.nextCount] = makeTrackCoverKey(nextTrack);
+            String nextCid = nextTrack["coverid"].as<String>();
+            String nextUrl = coverUrlForId(nextCid, 128);
+            if (!nextUrl.isEmpty()) {
+                out.nextCoverUrls[out.nextCount] = nextUrl;
+                out.nextCoverKeys[out.nextCount] = nextCid;
                 out.nextCount++;
             }
         }
@@ -168,10 +179,7 @@ bool squeezeSetShuffle(const String& mac, int mode) {
 }
 
 String squeezeCoverUrl(const String& coverId, int size) {
-    if (g_host.isEmpty() || coverId.isEmpty()) return "";
-    return "http://" + g_host + ":" + String(g_port)
-           + "/music/" + coverId
-           + "/cover_" + String(size) + "x" + String(size) + "_f.jpg";
+    return coverUrlForId(coverId, size);
 }
 
 // ─── Server-Discovery ────────────────────────────────────────────────────────

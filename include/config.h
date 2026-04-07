@@ -5,7 +5,7 @@
 // =============================================================================
 
 // --- Anwendung ---
-#define APP_VERSION "0.3.3"
+#define APP_VERSION "0.4.0"
 
 // --- Pins ---
 #define PIN_TFT_BL      7   // Hintergrundbeleuchtung (HIGH = an)
@@ -52,5 +52,5 @@
 
 // --- WiFi AP ---
 #define WIFI_AP_SSID             "Squeezie-Setup"
-#define WIFI_CONNECT_TIMEOUT_MS  15000
+#define WIFI_CONNECT_TIMEOUT_MS  8000
 #define LYRION_DEFAULT_PORT      9000

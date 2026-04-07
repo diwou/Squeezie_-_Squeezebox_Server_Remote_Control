@@ -124,7 +124,7 @@ static void startAP() {
     g_wifiState = WIFI_STATE_AP;
     srvLog("[WiFi] AP-Modus: %s  IP: %s", WIFI_AP_SSID, WiFi.softAPIP().toString().c_str());
 }
-static bool connectWiFi() {
+static bool connectWiFi(uint32_t timeoutMs = WIFI_CONNECT_TIMEOUT_MS) {
     if (g_net.ssid.isEmpty()) return false;
     resetWiFiStack();
     WiFi.mode(WIFI_STA);
@@ -140,7 +140,7 @@ static bool connectWiFi() {
     g_wifiState = WIFI_STATE_CONNECTING;
     srvLog("[WiFi] Verbinde mit '%s'...", g_net.ssid.c_str());
     uint32_t t0 = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_CONNECT_TIMEOUT_MS) delay(200);
+    while (WiFi.status() != WL_CONNECTED && millis() - t0 < timeoutMs) delay(100);
     if (WiFi.status() == WL_CONNECTED) {
         g_wifiState = WIFI_STATE_CONNECTED;
         g_wifiConnectedAt = millis();
@@ -148,7 +148,7 @@ static bool connectWiFi() {
         g_lmsFailStreak = 0;
         esp_wifi_set_ps(WIFI_PS_NONE);
         int8_t txPow = 0;
-        esp_wifi_set_max_tx_power(8);
+        esp_wifi_set_max_tx_power(78);
         esp_wifi_get_max_tx_power(&txPow);    // Rücklesen — war set_max_tx_power wirksam?
         srvLog("[WiFi] Verbunden, IP: %s, TX=%.1fdBm",
                WiFi.localIP().toString().c_str(), txPow * 0.25f);
@@ -715,6 +715,23 @@ static void setCachedStatusVolume(int volume) {
     xSemaphoreGive(g_statusMux);
 }
 
+bool wifiPollNow() {
+    if (g_wifiState != WIFI_STATE_CONNECTED || g_srv.playerMac.isEmpty() || g_otaActive) return false;
+    SqueezieStatus tmp;
+    if (!squeezeGetStatus(g_srv.playerMac, tmp)) {
+        if (g_lmsFailStreak < 255) g_lmsFailStreak++;
+        srvLog("[LMS] Sofort-Poll fehlgeschlagen.");
+        return false;
+    }
+    g_lastLmsOkAt = millis();
+    g_lmsFailStreak = 0;
+    xSemaphoreTake(g_statusMux, portMAX_DELAY);
+    g_status = tmp;
+    xSemaphoreGive(g_statusMux);
+    displayPreloadCover(tmp.coverUrl, tmp.coverKey);
+    return true;
+}
+
 static void scheduleRestart(uint32_t delayMs = 500) {
     g_restartAt = millis() + delayMs;
 }
@@ -1017,11 +1034,10 @@ void webserverInit() {
     WiFi.persistent(false);
     srvLog("[WebServer] SSID='%s'  Server='%s'",
            g_net.ssid.c_str(), g_srv.host.c_str());
-    delay(300);
     if (!connectWiFi()) {
         srvLog("[WiFi] Zweiter STA-Startversuch...");
-        delay(500);
-        if (!connectWiFi()) startAP();
+        delay(150);
+        if (!connectWiFi(4000)) startAP();
     }
     if (g_wifiState == WIFI_STATE_CONNECTED) {
         ArduinoOTA.setHostname("squeezie");
@@ -1058,20 +1074,7 @@ void webserverInit() {
     xTaskCreatePinnedToCore([](void*) {
         for (;;) {
             if (g_wifiState == WIFI_STATE_CONNECTED && !g_srv.playerMac.isEmpty() && !g_otaActive) {
-                SqueezieStatus tmp;
-                if (squeezeGetStatus(g_srv.playerMac, tmp)) {
-                    g_lastLmsOkAt = millis();
-                    g_lmsFailStreak = 0;
-                    xSemaphoreTake(g_statusMux, portMAX_DELAY);
-                    g_status = tmp;
-                    xSemaphoreGive(g_statusMux);
-                    if (!g_otaActive) {
-                        displayQueuePrefetch(tmp.nextCoverUrls, tmp.nextCoverKeys, tmp.nextCount);
-                    }
-                } else {
-                    if (g_lmsFailStreak < 255) g_lmsFailStreak++;
-                    srvLog("[LMS] Poll fehlgeschlagen.");
-                }
+                if (!wifiPollNow()) srvLog("[LMS] Poll fehlgeschlagen.");
             }
             for (int i = 0; i < 10 && !g_forceRepoll; i++) vTaskDelay(pdMS_TO_TICKS(40));
             g_forceRepoll = false;

@@ -1,23 +1,40 @@
-# PlatformIO — Build-Artefakte und heruntergeladene Libraries
+# PlatformIO: Build-Artefakte, heruntergeladene Libraries und Caches
 .pio/
+.pioenvs/
+.piolibdeps/
+.pioinit
+
+# Kompilierte Firmware/Debug-Artefakte, falls sie lokal kopiert werden
+*.bin
+*.elf
+*.map
+*.hex
 
 # Von PlatformIO generiert (maschinenspezifisch)
 .vscode/c_cpp_properties.json
 .vscode/launch.json
+.vscode/settings.json
 .vscode/.browse.c_cpp.db*
 .vscode/ipch/
+.clangd
 
-# Von pio run -t compiledb generiert (4 MB, maschinenspezifisch)
+# Von `pio run -t compiledb` generiert
 compile_commands.json
+.cache/
 
-# Claude Code — projektinterne KI-Konfiguration
+# Lokale KI-/Agenten-Konfiguration und Sitzungsdaten
+AGENTS.md
 CLAUDE.md
 CLAUDE.md.*
 .claude/
+.codex
+.codex/
 
-# Sonstiges
+# Lokale Notizen/Logs/temporäre Dateien
+BACKUP/
 context-log.md
 gotchas.md
-
-# Codex - projektinterne KI-Konfiguration
-AGENTS.md
+*.log
+*.tmp
+*.bak
+*~

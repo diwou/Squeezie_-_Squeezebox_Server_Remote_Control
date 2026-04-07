@@ -6,6 +6,34 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-04-07
+
+### Behoben
+- **Cover-Cache auf LMS-Cover-ID umgestellt**: aktuelle und vorgeladene Cover verwenden jetzt
+  die stabile `coverid` als Cache-Key und laden direkt über `/music/<coverid>/cover_128x128...`
+  statt über den playerbezogenen `current`-Endpoint; fertige Cover werden vor dem Zeichnen
+  zusätzlich gegen den erwarteten Key geprüft, damit bei schnellen Trackwechseln kein
+  vorgeladenes Future-Cover dem falschen Titel zugeordnet wird. Cover-lose Tracks löschen nun
+  außerdem die alte Cover-URL konsequent, statt versehentlich das vorherige Bild neu anzustoßen.
+- **Cover-Wechsel zusätzlich stabilisiert**: neue Cover-IDs werden erst nach zwei identischen
+  LMS-Polls übernommen, damit kurze Status-Vorgriffe nicht sofort ein Future-Cover anzeigen.
+  Außerdem werden unvollständig geladene JPEGs jetzt verworfen statt als halbes Cover gezeichnet.
+- **Cover-Pfad grundlegend vereinfacht**: Prefetch-Cover werden nicht mehr in den sichtbaren
+  Cover-Puffer übernommen; das Display lädt nur noch das aktuelle Player-Cover über den
+  LMS-`current`-Endpoint, nachdem der Track-Key stabil ist. Der Boot-Cover-Cache wird ebenfalls
+  nicht mehr vorab gezeichnet, damit kein altes oder vorgeladenes Bild auf dem Player-Screen
+  erscheinen kann.
+- **Start und Cover-Laden beschleunigt**: der feste 1,5-Sekunden-Startbildschirm nach der
+  WLAN-Verbindung entfällt; direkt nach dem Player-Screen wird ein erster LMS-Poll inklusive
+  Cover-Download angestoßen. Der HTTP-Cover-Reader wartet außerdem nicht mehr auf das Schließen
+  der Verbindung, sondern beendet den Download sofort nach der per `Content-Length` erwarteten
+  JPEG-Größe. Da der `current`-Endpoint pro Track dieselbe URL verwendet, prüft die
+  Download-Deduplizierung nun zusätzlich den Track-Key statt nur die URL.
+- **WLAN-Startzeit gekürzt**: der erste Verbindungsversuch wartet nur noch bis zu 8 Sekunden,
+  der zweite Retry nur noch 4 Sekunden statt erneut 15 Sekunden; außerdem wird die WLAN-
+  Sendeleistung wieder auf den normalen Maximalwert gesetzt, damit LMS-HTTP-Abrufe nicht
+  unnötig langsam laufen.
+
 ## [0.3.3] — 2026-04-06
 
 ### Behoben

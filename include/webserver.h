@@ -20,6 +20,7 @@ int                   wifiGetScrollSpeed(); // Scroll-Geschwindigkeit in ms/Pixe
 void                  wifiSetServer(const String& host, uint16_t port); // setzt + speichert in NVS
 void                  wifiSetPlayer(const String& mac);                 // setzt + speichert in NVS
 void                  wifiForceRepoll();
+bool                  wifiPollNow();
 bool                  wifiConsumeOtaProgress(int& pct);
 bool                  wifiIsOtaActive();
 
