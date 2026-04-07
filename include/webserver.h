@@ -19,6 +19,9 @@ String                wifiGetPlayerMac();
 int                   wifiGetScrollSpeed(); // Scroll-Geschwindigkeit in ms/Pixel (aus NVS)
 void                  wifiSetServer(const String& host, uint16_t port); // setzt + speichert in NVS
 void                  wifiSetPlayer(const String& mac);                 // setzt + speichert in NVS
+void                  wifiForceRepoll();
+bool                  wifiConsumeOtaProgress(int& pct);
+bool                  wifiIsOtaActive();
 
 // Webserver-Log (Ring-Buffer, abrufbar unter /log)
 void                  srvLog(const char* fmt, ...);

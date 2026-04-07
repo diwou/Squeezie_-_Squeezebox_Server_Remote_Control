@@ -12,6 +12,7 @@
 #include <ArduinoOTA.h>
 #include <time.h>
 #include <stdarg.h>
+#include <vector>
 
 // ─── Webserver-Log (Ring-Buffer, abrufbar unter /log) ────────────────────────
 
@@ -19,12 +20,15 @@
 #define LOG_LINE_LEN 128
 static char    s_log[LOG_LINES][LOG_LINE_LEN];
 static uint8_t s_logHead = 0;
+static portMUX_TYPE s_logMux = portMUX_INITIALIZER_UNLOCKED;
 
 void srvLog(const char* fmt, ...) {
+    portENTER_CRITICAL(&s_logMux);
     va_list ap; va_start(ap, fmt);
     vsnprintf(s_log[s_logHead], LOG_LINE_LEN, fmt, ap);
     va_end(ap);
     s_logHead = (s_logHead + 1) % LOG_LINES;
+    portEXIT_CRITICAL(&s_logMux);
 }
 
 // ─── Globale Instanzen ───────────────────────────────────────────────────────
@@ -32,16 +36,20 @@ void srvLog(const char* fmt, ...) {
 static AsyncWebServer   server(80);
 static DNSServer        dnsServer;
 static WifiState        g_wifiState   = WIFI_STATE_DISCONNECTED;
-static bool             g_restart     = false;
+static uint32_t         g_restartAt   = 0;
 static uint32_t         g_lastPoll    = 0;
 static uint32_t         g_reconnectAt = 0;
+static uint32_t         g_wifiConnectedAt = 0;
+static uint32_t         g_lastLmsOkAt = 0;
+static uint8_t          g_lmsFailStreak = 0;
 static SqueezieStatus   g_status;
 static SemaphoreHandle_t g_statusMux   = nullptr; // schützt g_status (Core0↔Core1)
-static uint32_t          g_coverVersion = 0;       // zählt bei jedem Cover-Wechsel hoch
-static String            g_lastCoverUrl;           // letzter bekannter Cover-URL (Poll-Task)
 static volatile bool     g_forceRepoll = false;   // sofortiger Re-Poll nach Steuerbefehl
 static volatile bool     g_otaActive   = false;   // lmsPoll + Cover-DL pausieren während OTA
 static int               g_lastOtaPct  = -1;      // Throttle: Display nur bei %-Änderung
+static volatile int      g_otaUiPct    = -1;      // OTA-Fortschritt, Anzeige im main loop
+static volatile bool     g_otaUiDirty  = false;   // OTA-Screen im main loop sicher neu zeichnen
+static int               g_otaError    = 0;       // letzter OTA-Fehlercode
 
 // ─── Konfigurationsstrukturen ────────────────────────────────────────────────
 
@@ -91,15 +99,37 @@ void wifiFactoryReset() {
 
 // ─── WiFi ────────────────────────────────────────────────────────────────────
 
+static void resetWiFiStack() {
+    WiFi.disconnect(false, true);
+    WiFi.mode(WIFI_MODE_NULL);
+    delay(150);
+}
+
 static void startAP() {
-    WiFi.disconnect(true); WiFi.mode(WIFI_AP); WiFi.softAP(WIFI_AP_SSID);
+    resetWiFiStack();
+    WiFi.mode(WIFI_AP);
+    delay(150);
+    bool ok = WiFi.softAP(WIFI_AP_SSID);
+    if (!ok) {
+        srvLog("[WiFi] softAP erster Versuch fehlgeschlagen, Retry...");
+        delay(250);
+        ok = WiFi.softAP(WIFI_AP_SSID);
+    }
+    if (!ok) {
+        g_wifiState = WIFI_STATE_DISCONNECTED;
+        srvLog("[WiFi] AP-Start fehlgeschlagen.");
+        return;
+    }
     dnsServer.start(53, "*", WiFi.softAPIP());
     g_wifiState = WIFI_STATE_AP;
     srvLog("[WiFi] AP-Modus: %s  IP: %s", WIFI_AP_SSID, WiFi.softAPIP().toString().c_str());
 }
 static bool connectWiFi() {
     if (g_net.ssid.isEmpty()) return false;
+    resetWiFiStack();
     WiFi.mode(WIFI_STA);
+    WiFi.setAutoReconnect(true);
+    delay(150);
     if (!g_net.dhcp && !g_net.ip.isEmpty()) {
         IPAddress ip, mask, gw, dns;
         ip.fromString(g_net.ip); mask.fromString(g_net.mask);
@@ -113,6 +143,9 @@ static bool connectWiFi() {
     while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_CONNECT_TIMEOUT_MS) delay(200);
     if (WiFi.status() == WL_CONNECTED) {
         g_wifiState = WIFI_STATE_CONNECTED;
+        g_wifiConnectedAt = millis();
+        g_lastLmsOkAt = millis();
+        g_lmsFailStreak = 0;
         esp_wifi_set_ps(WIFI_PS_NONE);
         int8_t txPow = 0;
         esp_wifi_set_max_tx_power(8);
@@ -124,7 +157,7 @@ static bool connectWiFi() {
         return true;
     }
     g_wifiState = WIFI_STATE_DISCONNECTED;
-    srvLog("[WiFi] Verbindung fehlgeschlagen.");
+    srvLog("[WiFi] Verbindung fehlgeschlagen (Status=%d).", (int)WiFi.status());
     return false;
 }
 
@@ -259,17 +292,17 @@ body{display:flex;flex-direction:column;min-height:100vh;max-width:560px;margin:
 #vol-slider{flex:1;accent-color:#00c853;cursor:pointer;height:6px;outline:none}
 #vv{min-width:56px;text-align:right;font-size:1em;color:#d0d0d0;font-weight:600}
 #ctrl-modes{display:flex;gap:12px;margin-bottom:8px}
-.cb{background:#242424;border:2px solid #555;color:#fff;border-radius:50%;
+.cb{background:linear-gradient(180deg,#4a4a4a 0%,#2a2a2a 100%);border:2px solid #c8c8c8;color:#fff;border-radius:50%;
   width:64px;height:64px;display:flex;align-items:center;justify-content:center;
-  cursor:pointer;flex-shrink:0;transition:transform .1s}
-.cb:active{transform:scale(.88);background:#2e2e2e}
+  cursor:pointer;flex-shrink:0;transition:transform .1s;box-shadow:0 8px 20px rgba(0,0,0,.35)}
+.cb:active{transform:scale(.88);filter:brightness(.94)}
 .cb svg{width:28px;height:28px;fill:currentColor;pointer-events:none}
-.cb.play{background:#00c853;border-color:#00c853;color:#000;width:84px;height:84px}
+.cb.play{background:linear-gradient(180deg,#34eb7d 0%,#00c853 100%);border-color:#eafff0;color:#001b08;width:84px;height:84px}
 .cb.play svg{width:40px;height:40px}
-.cb.play.paused{background:#242424;border-color:#00c853;color:#00c853}
+.cb.play.paused{background:linear-gradient(180deg,#3a3a3a 0%,#242424 100%);border-color:#7cf0a7;color:#7cf0a7}
 .cb.sm{width:52px;height:52px}
 .cb.sm svg{width:24px;height:24px}
-.cb.mute{border-color:#666}
+.cb.mute{border-color:#ffb0b0;color:#fff}
 .mode-btn{flex:1;padding:14px 8px;background:#1e1e1e;border:2px solid #444;
   border-radius:12px;color:#a0a0a0;font-size:1em;cursor:pointer;
   text-align:center;line-height:1.4;transition:border-color .2s}
@@ -314,13 +347,13 @@ body{display:flex;flex-direction:column;min-height:100vh;max-width:560px;margin:
   </div>
   <div id=ctrl-volume>
     <button class="cb sm" onclick="c('vd')" title="Leiser">
-      <svg viewBox="0 0 24 24"><path d="M3 11v2h14v-2H3zm15-5v14l6-7z"/></svg>
+      <svg viewBox="0 0 24 24"><path d="M14 3.23v2.06c2.89.86 5 3.54 5 6.71 0 .94-.2 1.82-.54 2.64l1.51 1.51A8.8 8.8 0 0 0 21 12c0-4.28-3-7.86-7-8.77zM3 9v6h4l5 5V4L7 9H3zM14 9.82v4.36c1.19-.69 2-1.97 2-3.18s-.81-2.49-2-3.18z"/></svg>
     </button>
     <input type=range id=vol-slider min=0 max=100 value=0
       oninput="pvol(this.value)" onchange="svol(this.value)">
     <span id=vv>0&nbsp;%</span>
     <button class="cb sm" onclick="c('vu')" title="Lauter">
-      <svg viewBox="0 0 24 24"><path d="M3 11v2h14v-2H3zm15 2.92V10.08L21.9 12 18 13.92z"/></svg>
+      <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4-.91 7-4.49 7-8.77s-3-7.86-7-8.77zM14 9.82v4.36c1.19-.69 2-1.97 2-3.18s-.81-2.49-2-3.18z"/></svg>
     </button>
     <button class="cb sm mute" onclick="c('mut')" title="Stummschalten">
       <svg viewBox="0 0 24 24"><path d="M16.5 12A4.5 4.5 0 0 0 14 7.97v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.8 8.8 0 0 0 21 12c0-4.28-3-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06A8.99 8.99 0 0 0 17.73 18L19 19.27 20.27 18 5.27 3 4.27 3zM12 4 9.91 6.09 12 8.18V4z"/></svg>
@@ -378,7 +411,7 @@ function upd(d){
   if(!volTimer){
     var v=d.volume||0;
     document.getElementById('vol-slider').value=v;
-    var vd=v<=6?0:Math.round((v-6)*100/94);txt('vv',vd+'\u00a0%');
+    txt('vv',v+'\u00a0%');
   }
   dur=d.duration||0;
   txt('ps',fmt(d.position||0));
@@ -387,10 +420,14 @@ function upd(d){
   document.getElementById('pb-fill').style.width=pct+'%';
   if(d.coverUrl!==prevCover){
     prevCover=d.coverUrl;
+    var ci=document.getElementById('ci');
     if(d.coverUrl){
-      document.getElementById('ci').src=d.coverUrl;
+      ci.style.display='none';
+      document.getElementById('ci-ph').style.display='block';
+      ci.src=d.coverUrl;
     } else {
-      document.getElementById('ci').style.display='none';
+      ci.style.display='none';
+      ci.removeAttribute('src');
       document.getElementById('ci-ph').style.display='block';
     }
   }
@@ -410,7 +447,7 @@ function c(cmd){
     body:JSON.stringify({cmd:cmd})}).then(function(){setTimeout(poll,800);});
 }
 function pvol(v){
-  var vd=v<=6?0:Math.round((v-6)*100/94);txt('vv',vd+'\u00a0%');
+  txt('vv',v+'\u00a0%');
   if(volTimer)clearTimeout(volTimer);
   volTimer=setTimeout(function(){volTimer=null;},1500);
 }
@@ -418,7 +455,7 @@ function svol(v){
   if(volTimer)clearTimeout(volTimer);
   volTimer=null;
   document.getElementById('vol-slider').value=v;
-  var vd=v<=6?0:Math.round((v-6)*100/94);txt('vv',vd+'\u00a0%');
+  txt('vv',v+'\u00a0%');
   c('vol:'+v);
 }
 function seek(e){
@@ -651,8 +688,8 @@ fetch('/api/config').then(function(r){return r.json();}).then(function(d){
 static String statusToJson() {
     xSemaphoreTake(g_statusMux, portMAX_DELAY);
     SqueezieStatus s = g_status;
-    uint32_t coverV = g_coverVersion;
     xSemaphoreGive(g_statusMux);
+    uint32_t coverV = displayGetCoverSerial();
     JsonDocument doc;
     doc["playing"]    = s.playing;
     doc["title"]      = s.title;
@@ -669,6 +706,30 @@ static String statusToJson() {
     doc["connected"]  = (g_wifiState == WIFI_STATE_CONNECTED);
     String out; serializeJson(doc, out);
     return out;
+}
+
+static void setCachedStatusVolume(int volume) {
+    if (!g_statusMux) return;
+    xSemaphoreTake(g_statusMux, portMAX_DELAY);
+    g_status.volume = constrain(volume, 0, 100);
+    xSemaphoreGive(g_statusMux);
+}
+
+static void scheduleRestart(uint32_t delayMs = 500) {
+    g_restartAt = millis() + delayMs;
+}
+
+bool wifiConsumeOtaProgress(int& pct) {
+    int currentPct = g_otaUiPct;
+    bool dirty = g_otaUiDirty;
+    if (currentPct < 0) return false;
+    pct = currentPct;
+    if (dirty) g_otaUiDirty = false;
+    return dirty;
+}
+
+bool wifiIsOtaActive() {
+    return g_otaActive || g_otaUiPct >= 0;
 }
 
 // Mehrteilige Seite zusammensetzen und mit Cache-Control senden
@@ -690,7 +751,11 @@ static void setupRoutes() {
         String out; out.reserve(LOG_LINES * LOG_LINE_LEN);
         for (int i = 0; i < LOG_LINES; i++) {
             int idx = (s_logHead + i) % LOG_LINES;
-            if (s_log[idx][0]) { out += s_log[idx]; out += '\n'; }
+            char line[LOG_LINE_LEN];
+            portENTER_CRITICAL(&s_logMux);
+            memcpy(line, s_log[idx], LOG_LINE_LEN);
+            portEXIT_CRITICAL(&s_logMux);
+            if (line[0]) { out += line; out += '\n'; }
         }
         req->send(200, "text/plain; charset=utf-8", out);
     });
@@ -711,15 +776,14 @@ static void setupRoutes() {
     });
 
     server.on("/api/cover", HTTP_GET, [](AsyncWebServerRequest* req) {
-        const uint8_t* buf = displayGetCoverBuf();
-        size_t         len = displayGetCoverLen();
-        if (!buf || len < 2) {
+        std::vector<uint8_t> cover;
+        if (!displayCopyCover(cover)) {
             req->send(204, "image/jpeg", "");
             return;
         }
-        AsyncWebServerResponse* res =
-            req->beginResponse(200, "image/jpeg", buf, len);
+        AsyncResponseStream* res = req->beginResponseStream("image/jpeg");
         res->addHeader("Cache-Control", "no-store");
+        res->write(cover.data(), cover.size());
         req->send(res);
     });
 
@@ -734,40 +798,44 @@ static void setupRoutes() {
             }
             String cmd = doc["cmd"].as<String>();
             String mac = g_srv.playerMac;
+            SqueezieStatus status = squeezieGetCachedStatus();
             if (mac.isEmpty()) {
                 req->send(200, "application/json", "{\"ok\":false,\"error\":\"kein Player\"}"); return;
             }
-            if      (cmd == "toggle") { if (g_status.playing) squeezePause(mac); else squeezePlay(mac); }
-            else if (cmd == "next")   squeezeNext(mac);
-            else if (cmd == "prev")   squeezePrev(mac);
+            bool ok = false;
+            if      (cmd == "toggle") { ok = status.playing ? squeezePause(mac) : squeezePlay(mac); }
+            else if (cmd == "next")   ok = squeezeNext(mac);
+            else if (cmd == "prev")   ok = squeezePrev(mac);
             else if (cmd == "vu") {
-                squeezeAdjustVolume(mac, +1);
-                xSemaphoreTake(g_statusMux, portMAX_DELAY);
-                g_status.volume = constrain(g_status.volume + 1, 0, 100);
-                xSemaphoreGive(g_statusMux);
+                int nextVolume = constrain(status.volume + 1, 0, 100);
+                ok = squeezeSetVolume(mac, nextVolume);
+                if (ok) setCachedStatusVolume(nextVolume);
             }
             else if (cmd == "vd") {
-                squeezeAdjustVolume(mac, -1);
-                xSemaphoreTake(g_statusMux, portMAX_DELAY);
-                g_status.volume = constrain(g_status.volume - 1, 0, 100);
-                xSemaphoreGive(g_statusMux);
+                int nextVolume = constrain(status.volume - 1, 0, 100);
+                ok = squeezeSetVolume(mac, nextVolume);
+                if (ok) setCachedStatusVolume(nextVolume);
             }
             else if (cmd == "mut") {
-                squeezeSetVolume(mac, 0);
-                xSemaphoreTake(g_statusMux, portMAX_DELAY);
-                g_status.volume = 0;
-                xSemaphoreGive(g_statusMux);
+                ok = squeezeSetVolume(mac, 0);
+                if (ok) setCachedStatusVolume(0);
             }
             else if (cmd.startsWith("vol:")) {
                 int v = constrain(cmd.substring(4).toInt(), 0, 100);
-                squeezeSetVolume(mac, v);
-                xSemaphoreTake(g_statusMux, portMAX_DELAY);
-                g_status.volume = v;
-                xSemaphoreGive(g_statusMux);
+                ok = squeezeSetVolume(mac, v);
+                if (ok) setCachedStatusVolume(v);
             }
-            else if (cmd == "rpt")    squeezeSetRepeat (mac, (g_status.repeatMode  + 1) % 3);
-            else if (cmd == "shf")    squeezeSetShuffle(mac, (g_status.shuffleMode + 1) % 3);
-            else if (cmd.startsWith("seek:")) squeezeSeek(mac, cmd.substring(5).toInt());
+            else if (cmd == "rpt")    ok = squeezeSetRepeat (mac, (status.repeatMode  + 1) % 3);
+            else if (cmd == "shf")    ok = squeezeSetShuffle(mac, (status.shuffleMode + 1) % 3);
+            else if (cmd.startsWith("seek:")) ok = squeezeSeek(mac, cmd.substring(5).toInt());
+            else {
+                req->send(400, "application/json", "{\"ok\":false,\"error\":\"unbekannter Befehl\"}");
+                return;
+            }
+            if (!ok) {
+                req->send(502, "application/json", "{\"ok\":false,\"error\":\"LMS-Befehl fehlgeschlagen\"}");
+                return;
+            }
             g_forceRepoll = true;
             req->send(200, "application/json", "{\"ok\":true}");
         }
@@ -831,7 +899,7 @@ static void setupRoutes() {
             g_net.ntp  = doc["ntp"]  | "pool.ntp.org";
             saveNetCfg();
             req->send(200, "application/json", "{\"ok\":true}");
-            g_restart = true;
+            scheduleRestart();
         }
     );
 
@@ -871,30 +939,49 @@ static void setupRoutes() {
     server.on("/update", HTTP_POST,
         [](AsyncWebServerRequest* req) {
             bool ok = !Update.hasError();
-            AsyncWebServerResponse* res = req->beginResponse(200, "text/html; charset=UTF-8",
-                ok ? "<html><body style='background:#0d0d0d;color:#00c853;font-family:sans-serif;"
-                     "padding:30px;font-size:20px'><h2>Update erfolgreich!</h2><p>Ger&auml;t startet neu...</p></body></html>"
-                   : "<html><body style='background:#0d0d0d;color:#e94560;font-family:sans-serif;"
-                     "padding:30px;font-size:20px'><h2>Update fehlgeschlagen!</h2>"
-                     "<a href='/settings' style='color:#aaa'>Zur&uuml;ck</a></body></html>");
+            String body = ok
+                ? "<html><body style='background:#0d0d0d;color:#00c853;font-family:sans-serif;"
+                  "padding:30px;font-size:20px'><h2>Update erfolgreich!</h2><p>Ger&auml;t startet neu...</p></body></html>"
+                : "<html><body style='background:#0d0d0d;color:#e94560;font-family:sans-serif;"
+                  "padding:30px;font-size:20px'><h2>Update fehlgeschlagen!</h2><p>Fehlercode: "
+                  + String(g_otaError) + "</p>"
+                  "<a href='/settings' style='color:#aaa'>Zur&uuml;ck</a></body></html>";
+            AsyncWebServerResponse* res = req->beginResponse(200, "text/html; charset=UTF-8", body);
             res->addHeader("Connection", "close");
             req->send(res);
-            if (ok) g_restart = true;
+            if (ok) scheduleRestart(1200);
+            else g_otaActive = false;
         },
         [](AsyncWebServerRequest* req, String filename, size_t index, uint8_t* data, size_t len, bool final) {
             if (!index) {
                 g_otaActive  = true;
                 g_lastOtaPct = -1;
+                g_otaUiPct   = 0;
+                g_otaUiDirty = true;
+                g_otaError   = 0;
                 srvLog("[OTA] %s", filename.c_str());
-                Update.begin(UPDATE_SIZE_UNKNOWN);
                 displayShowOTA(0);
+                size_t otaSize = req->contentLength() > 0 ? req->contentLength() : UPDATE_SIZE_UNKNOWN;
+                if (!Update.begin(otaSize, U_FLASH)) {
+                    g_otaError = Update.getError();
+                    g_otaActive = false;
+                    srvLog("[OTA] Begin fehlgeschlagen: err=%d", g_otaError);
+                }
             }
             if (!Update.hasError()) {
-                Update.write(data, len);
+                size_t written = Update.write(data, len);
+                if (written != len) {
+                    g_otaError = Update.getError();
+                    g_otaActive = false;
+                    srvLog("[OTA] Write fehlgeschlagen: %u/%u err=%d",
+                           (unsigned)written, (unsigned)len, g_otaError);
+                }
                 if (req->contentLength() > 0) {
                     int pct = (int)((index + len) * 100 / req->contentLength());
                     if (pct != g_lastOtaPct) {
                         g_lastOtaPct = pct;
+                        g_otaUiPct = pct;
+                        g_otaUiDirty = true;
                         displayShowOTA(pct);
                     }
                 }
@@ -902,9 +989,15 @@ static void setupRoutes() {
             if (final) {
                 if (Update.end(true)) {
                     srvLog("[OTA] Fertig: %u Bytes", index + len);
+                    g_otaActive = false;
+                    g_otaUiPct = 100;
+                    g_otaUiDirty = true;
                     displayShowOTA(100);
                 } else {
-                    srvLog("[OTA] Fehler beim Abschluss.");
+                    g_otaError = Update.getError();
+                    g_otaActive = false;
+                    g_otaUiDirty = true;
+                    srvLog("[OTA] Fehler beim Abschluss: err=%d", g_otaError);
                 }
             }
         }
@@ -921,21 +1014,42 @@ static void setupRoutes() {
 void webserverInit() {
     g_statusMux = xSemaphoreCreateMutex();
     loadCfg();
+    WiFi.persistent(false);
     srvLog("[WebServer] SSID='%s'  Server='%s'",
            g_net.ssid.c_str(), g_srv.host.c_str());
-    if (!connectWiFi()) startAP();
+    delay(300);
+    if (!connectWiFi()) {
+        srvLog("[WiFi] Zweiter STA-Startversuch...");
+        delay(500);
+        if (!connectWiFi()) startAP();
+    }
     if (g_wifiState == WIFI_STATE_CONNECTED) {
-        // Cover sofort vorladen — URL ist aus Config bekannt, kein Status-Poll nötig
-        if (!g_srv.host.isEmpty() && !g_srv.playerMac.isEmpty()) {
-            String url = "http://" + g_srv.host + ":" + String(g_srv.port)
-                         + "/music/current/cover_128x128_o.jpg?player=" + g_srv.playerMac;
-            displayPreloadCover(url);
-        }
         ArduinoOTA.setHostname("squeezie");
         ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-            displayShowOTA((int)(progress * 100 / total));
+            g_otaActive = true;
+            if (total > 0) {
+                int pct = (int)(progress * 100 / total);
+                g_otaUiPct = pct;
+                g_otaUiDirty = true;
+                if (pct != g_lastOtaPct) {
+                    g_lastOtaPct = pct;
+                    displayShowOTA(pct);
+                }
+            }
         });
-        ArduinoOTA.onEnd([]() { displayShowOTA(100); });
+        ArduinoOTA.onEnd([]() {
+            g_otaUiPct = 100;
+            g_otaUiDirty = true;
+            g_otaActive = false;
+            g_lastOtaPct = -1;
+            displayShowOTA(100);
+        });
+        ArduinoOTA.onError([](ota_error_t error) {
+            g_otaError = (int)error;
+            g_otaUiDirty = true;
+            g_otaActive = false;
+            srvLog("[OTA] ArduinoOTA-Fehler: err=%d", g_otaError);
+        });
         ArduinoOTA.begin();
         srvLog("[OTA] ArduinoOTA bereit.");
     }
@@ -946,20 +1060,20 @@ void webserverInit() {
             if (g_wifiState == WIFI_STATE_CONNECTED && !g_srv.playerMac.isEmpty() && !g_otaActive) {
                 SqueezieStatus tmp;
                 if (squeezeGetStatus(g_srv.playerMac, tmp)) {
+                    g_lastLmsOkAt = millis();
+                    g_lmsFailStreak = 0;
                     xSemaphoreTake(g_statusMux, portMAX_DELAY);
                     g_status = tmp;
-                    if (tmp.coverUrl != g_lastCoverUrl) {
-                        g_lastCoverUrl = tmp.coverUrl;
-                        g_coverVersion++;
-                    }
                     xSemaphoreGive(g_statusMux);
                     if (!g_otaActive) {
-                        displayPreloadCover(tmp.coverUrl);
-                        displayQueuePrefetch(tmp.nextCoverUrls, tmp.nextCount);
+                        displayQueuePrefetch(tmp.nextCoverUrls, tmp.nextCoverKeys, tmp.nextCount);
                     }
+                } else {
+                    if (g_lmsFailStreak < 255) g_lmsFailStreak++;
+                    srvLog("[LMS] Poll fehlgeschlagen.");
                 }
             }
-            for (int i = 0; i < 25 && !g_forceRepoll; i++) vTaskDelay(pdMS_TO_TICKS(40));
+            for (int i = 0; i < 10 && !g_forceRepoll; i++) vTaskDelay(pdMS_TO_TICKS(40));
             g_forceRepoll = false;
         }
     }, "lmsPoll", 8192, nullptr, 1, nullptr, 0);
@@ -967,13 +1081,31 @@ void webserverInit() {
 }
 
 void webserverLoop() {
-    if (g_restart) { delay(500); ESP.restart(); }
-    if (g_wifiState == WIFI_STATE_AP) { dnsServer.processNextRequest(); return; }
+    if (g_wifiState == WIFI_STATE_AP) { dnsServer.processNextRequest(); }
+    if (g_restartAt != 0 && millis() >= g_restartAt) {
+        delay(100);
+        ESP.restart();
+    }
+    if (g_wifiState == WIFI_STATE_AP) return;
     ArduinoOTA.handle();
     if (g_wifiState == WIFI_STATE_CONNECTED && WiFi.status() != WL_CONNECTED) {
         srvLog("[WiFi] Verbindung verloren.");
         g_wifiState   = WIFI_STATE_DISCONNECTED;
         g_reconnectAt = millis() + 30000;
+    }
+    if (g_wifiState == WIFI_STATE_CONNECTED
+        && !g_otaActive
+        && !g_srv.host.isEmpty()
+        && !g_srv.playerMac.isEmpty()
+        && millis() - g_wifiConnectedAt > 10000
+        && millis() - g_lastLmsOkAt > 10000
+        && g_lmsFailStreak >= 5) {
+        srvLog("[WiFi] Verbunden, aber kein LMS-Verkehr (%u Fehler) - verbinde WLAN neu.",
+               (unsigned)g_lmsFailStreak);
+        WiFi.disconnect(true, false);
+        g_wifiState   = WIFI_STATE_DISCONNECTED;
+        g_reconnectAt = millis() + 500;
+        g_lmsFailStreak = 0;
     }
     if (g_wifiState == WIFI_STATE_DISCONNECTED && millis() > g_reconnectAt) {
         if (!connectWiFi()) g_reconnectAt = millis() + 30000;
@@ -1009,4 +1141,8 @@ void wifiSetPlayer(const String& mac) {
     saveSrvCfg();
     g_forceRepoll = true;
     srvLog("[Settings] Player MAC: %s", mac.c_str());
+}
+
+void wifiForceRepoll() {
+    g_forceRepoll = true;
 }

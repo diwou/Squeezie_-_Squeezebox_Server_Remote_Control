@@ -77,11 +77,11 @@ static Screen g_screen = SCREEN_NONE;
 #define COL_YELLOW    ((uint32_t)0xFFCC00)  // Gelb (WLAN-Verbindungsaufbau)
 
 // Player-Screen Zustand (selektives Neuzeichnen)
-static String  g_dTitle, g_dArtist, g_dAlbum, g_dCoverUrl, g_dPlayer;
-static String  g_dTitleD, g_dArtistD, g_dAlbumD; // displaybereit (ASCII-transliteriert)
+static String  g_dTitle, g_dArtist, g_dAlbum, g_dCoverUrl, g_dCoverKey, g_dPlayer;
+static String  g_dTitleD, g_dArtistD, g_dAlbumD; // displaybereit (UTF-8-faehig)
 static bool    g_dPlaying  = false;
 static int     g_dVolume   = -1, g_dRepeat  = -1, g_dShuffle = -1;
-static int     g_dPosition = -1, g_dDuration = 0;
+static int     g_dPosition = -1, g_dDuration = 0, g_dTrackNum = -1;
 static int     g_lmsPos   = -1;   // zuletzt von LMS empfangene Position
 static int     g_localPos  = 0;   // Interpolationsbasis
 static uint32_t g_localPosMs = 0; // millis() beim letzten LMS-Sync
@@ -99,16 +99,20 @@ static bool     g_settSearched  = false;
 // Scroll-State für Titel/Artist/Album (Index 0/1/2)
 static int32_t g_scrollOff[3]   = {0, 0, 0}; // aktueller Pixel-Offset
 static uint32_t g_scrollLast    = 0;          // letzter Scroll-Zeitstempel
+static LGFX_Sprite g_infoLineSprite(&tft);
 
 // Cover-Puffer (PSRAM) und Download-State
 static uint8_t*          g_coverBuf      = nullptr;
+static uint8_t*          g_coverDlBuf    = nullptr;
 static volatile bool     g_coverReady    = false;
 static volatile size_t   g_coverLen      = 0;
 static volatile uint32_t g_coverGen      = 0;
 static volatile uint32_t g_dlGen         = 0;
+static volatile uint32_t g_coverSerial   = 0;
 static String            g_pendingCoverUrl;
 static String            g_dispatchedCoverUrl;
 static TaskHandle_t      g_coverTask     = nullptr;
+static SemaphoreHandle_t g_coverMux      = nullptr;
 
 // Prefetch-Slots: Cover der nächsten Tracks (PSRAM, sequenziell geladen)
 struct PrefetchSlot {
@@ -116,9 +120,11 @@ struct PrefetchSlot {
     size_t   len   = 0;
     bool     ready = false;
     String   url;
+    String   key;
 };
 static PrefetchSlot      g_pf[SQUEEZE_PREFETCH];
 static String            g_pfQueue[SQUEEZE_PREFETCH];
+static String            g_pfQueueKeys[SQUEEZE_PREFETCH];
 static int               g_pfQueueCount  = 0;
 static SemaphoreHandle_t g_pfMux         = nullptr;
 static TaskHandle_t      g_pfTask        = nullptr;
@@ -178,8 +184,8 @@ static bool xpt2046Read(int32_t* x, int32_t* y) {
 
 LGFX tft;
 
-// UTF-8 → druckbares ASCII: ersetzt gängige Nicht-ASCII-Zeichen durch Alternativen.
-// LovyanGFX-Standardfont zeigt nur ASCII 0x20–0x7E — alles andere wird als Quadrat dargestellt.
+// UTF-8 → druckbares ASCII: Fallback für Bereiche, die weiterhin den Standardfont nutzen.
+// Fuer Titel/Artist/Album verwenden wir weiter unten einen UTF-8-faehigen Font.
 static String utf8ToAscii(const String& src) {
     String out;
     out.reserve(src.length());
@@ -230,6 +236,25 @@ static String utf8ToAscii(const String& src) {
         p++; // ungültiges Byte überspringen
     }
     return out;
+}
+
+static void setPlayerInfoFont(uint8_t size) {
+    tft.setTextSize(1);
+    if (size >= 3) tft.setFont(&fonts::lgfxJapanGothicP_28);
+    else           tft.setFont(&fonts::lgfxJapanGothicP_24);
+}
+
+static int getPlayerInfoLineHeight(uint8_t size) {
+    setPlayerInfoFont(size);
+    return tft.fontHeight() + 4;
+}
+
+static bool ensureInfoLineSprite(int height) {
+    if (height <= 0) return false;
+    if (g_infoLineSprite.width() == PL_INFO_W && g_infoLineSprite.height() == height) return true;
+    g_infoLineSprite.deleteSprite();
+    g_infoLineSprite.setColorDepth(16);
+    return g_infoLineSprite.createSprite(PL_INFO_W, height);
 }
 
 // ─── Hilfsfunktionen ────────────────────────────────────────────────────────
@@ -394,8 +419,10 @@ void displayInit() {
     srvLog("[Display] Initialisiert: %dx%d, Rotation %d",
            DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_ROTATION);
 
+    g_coverMux = xSemaphoreCreateMutex();
     g_coverBuf = (uint8_t*)ps_malloc(131072);
-    if (!g_coverBuf) {
+    g_coverDlBuf = (uint8_t*)ps_malloc(131072);
+    if (!g_coverBuf || !g_coverDlBuf) {
         srvLog("[cover] ps_malloc FAIL");
     } else {
         // Cover-Cache aus LittleFS laden — läuft vor WiFi, sofort beim Player-Screen verfügbar
@@ -405,7 +432,11 @@ void displayInit() {
                 size_t n = f.read(g_coverBuf, 131070);
                 f.close();
                 bool valid = (n >= 2 && g_coverBuf[0] == 0xFF && g_coverBuf[1] == 0xD8);
-                if (valid) { g_coverLen = n; g_coverReady = true; }
+                if (valid) {
+                    g_coverLen = n;
+                    g_coverReady = true;
+                    g_coverSerial = 1;
+                }
                 srvLog("[cover] Cache: %u B, valid=%d", (unsigned)n, valid);
             }
         } else {
@@ -458,13 +489,70 @@ void displayShowStartup(const char* version, const char* ip) {
 // ─── Player-Screen Zeichenhelfer ─────────────────────────────────────────────
 
 static void drawCircleBtn(int16_t cx, int16_t cy, int16_t r,
-                           uint32_t bg, uint32_t fg, const char* label) {
+                           uint32_t bg, uint32_t fg, const char* icon) {
+    tft.fillCircle(cx, cy + 2, r, (uint32_t)0x101010);
     tft.fillCircle(cx, cy, r, bg);
-    tft.drawCircle(cx, cy, r, COL_MID);
+    tft.drawCircle(cx, cy, r, COL_WHITE);
+    tft.drawCircle(cx, cy, r - 2, (bg == COL_GREEN) ? (uint32_t)0xE8FBEF : COL_MID);
+
+    if (!icon) return;
+    if (!strcmp(icon, "play")) {
+        tft.fillTriangle(cx - 8, cy - 12, cx - 8, cy + 12, cx + 11, cy, fg);
+    } else if (!strcmp(icon, "pause")) {
+        tft.fillRoundRect(cx - 11, cy - 12, 7, 24, 2, fg);
+        tft.fillRoundRect(cx + 4, cy - 12, 7, 24, 2, fg);
+    } else if (!strcmp(icon, "prev")) {
+        tft.fillRect(cx - 13, cy - 12, 4, 24, fg);
+        tft.fillTriangle(cx + 9, cy - 13, cx + 9, cy + 13, cx - 8, cy, fg);
+    } else if (!strcmp(icon, "next")) {
+        tft.fillRect(cx + 9, cy - 12, 4, 24, fg);
+        tft.fillTriangle(cx - 9, cy - 13, cx - 9, cy + 13, cx + 8, cy, fg);
+    } else if (!strcmp(icon, "voldown") || !strcmp(icon, "volup")) {
+        tft.fillTriangle(cx - 11, cy - 5, cx - 4, cy - 11, cx - 4, cy + 11, fg);
+        tft.fillRect(cx - 15, cy - 5, 5, 10, fg);
+        tft.drawArc(cx + 1, cy, 7, 7, -45, 45, fg);
+        if (!strcmp(icon, "volup")) {
+            tft.drawArc(cx + 1, cy, 12, 12, -45, 45, fg);
+            tft.fillRect(cx + 11, cy - 1, 8, 3, fg);
+            tft.fillRect(cx + 14, cy - 4, 3, 9, fg);
+        } else {
+            tft.fillRect(cx + 10, cy - 1, 8, 3, fg);
+        }
+    }
+}
+
+static void drawVolumeIcon(int16_t x, int16_t y, int16_t w, int16_t h,
+                           uint32_t bg, uint32_t fg, bool louder) {
+    tft.fillRoundRect(x, y, w, h, 6, bg);
+    tft.drawRoundRect(x, y, w, h, 6, COL_WHITE);
+    tft.setFont(nullptr);
     tft.setTextDatum(MC_DATUM);
     tft.setTextColor(fg, bg);
-    tft.setTextSize(2);
-    tft.drawString(label, cx, cy);
+    tft.setTextSize(3);
+    if (louder) {
+        tft.drawString("+", x + w / 2, y + h / 2 + 1);
+    } else {
+        tft.drawString("-", x + w / 2, y + h / 2 + 1);
+    }
+}
+
+static void drawRepeatGlyph(int16_t x, int16_t y, uint32_t fg) {
+    tft.drawFastHLine(x, y, 14, fg);
+    tft.drawFastVLine(x, y, 5, fg);
+    tft.drawFastHLine(x + 5, y + 10, 14, fg);
+    tft.drawFastVLine(x + 19, y + 5, 6, fg);
+    tft.fillTriangle(x + 14, y - 3, x + 14, y + 3, x + 19, y, fg);
+    tft.fillTriangle(x + 5, y + 7, x + 5, y + 13, x, y + 10, fg);
+}
+
+static void drawShuffleGlyph(int16_t x, int16_t y, uint32_t fg) {
+    tft.drawLine(x, y + 1, x + 6, y + 1, fg);
+    tft.drawLine(x + 6, y + 1, x + 12, y + 6, fg);
+    tft.drawLine(x + 12, y + 6, x + 18, y + 6, fg);
+    tft.drawLine(x, y + 11, x + 6, y + 11, fg);
+    tft.drawLine(x + 6, y + 11, x + 12, y + 6, fg);
+    tft.drawLine(x + 12, y + 6, x + 18, y + 6, fg);
+    tft.fillTriangle(x + 18, y + 3, x + 18, y + 9, x + 23, y + 6, fg);
 }
 
 // Textzeile ohne Flackern: erst Text mit Hintergrundfarbe zeichnen,
@@ -477,16 +565,13 @@ static void drawInfoLine(const char* txt, int16_t x, int16_t y, int16_t w,
     tft.setTextDatum(TL_DATUM);
     tft.setTextColor(color, COL_BG);
     tft.setClipRect(x, y, w, lh);
+    tft.fillRect(x, y, w, lh, COL_BG);
     if (!txt || !txt[0]) {
-        tft.fillRect(x, y, w, lh, COL_BG);
         tft.clearClipRect();
         return;
     }
     tft.drawString(txt, x + 2, y + 2);
     tft.clearClipRect();
-    // Bereich rechts vom Text löschen (falls neuer Text kürzer als alter)
-    int tw = tft.textWidth(txt) + 4;
-    if (tw < w) tft.fillRect(x + tw, y, w - tw, lh, COL_BG);
 }
 
 // Scrollende Textzeile: passt Text → wie drawInfoLine; sonst Marquee-Offset anwenden.
@@ -498,30 +583,66 @@ static void drawScrollLine(const char* txt, int16_t x, int16_t y, int16_t w,
     int lh = 8 * size + 4;
     tft.setTextDatum(TL_DATUM);
     tft.setTextColor(color, COL_BG);
+    tft.setClipRect(x, y, w, lh);
+    tft.fillRect(x, y, w, lh, COL_BG);
     if (!txt || !txt[0]) {
-        tft.fillRect(x, y, w, lh, COL_BG);
+        tft.clearClipRect();
         return;
     }
     int tw = tft.textWidth(txt);
     if (tw + 4 <= w || offset == 0) {
-        // Text passt oder Offset = 0: normal zeichnen (kein Clip nötig für kurze Texte)
-        tft.setClipRect(x, y, w, lh);
+        // Text passt oder Offset = 0: normal zeichnen
         tft.drawString(txt, x + 2, y + 2);
         tft.clearClipRect();
-        if (tw + 4 < w) tft.fillRect(x + tw + 4, y, w - tw - 4, lh, COL_BG);
     } else {
         // Scrolling: Text mit negativem Offset zeichnen, Clip auf Feldbreite
-        tft.setClipRect(x, y, w, lh);
         tft.drawString(txt, x + 2 - offset, y + 2);
         tft.clearClipRect();
-        // Kanten-Fill nach drawString: verhindert Ghost-Text
-        int textLeft = x + 2 - offset;
-        if (textLeft > x)
-            tft.fillRect(x, y, textLeft - x, lh, COL_BG);
-        int textRight = textLeft + tw;
-        if (textRight < x + w)
-            tft.fillRect(textRight, y, (x + w) - textRight, lh, COL_BG);
     }
+}
+
+static void drawPlayerScrollLine(const char* txt, int16_t x, int16_t y, int16_t w,
+                                 uint32_t color, uint8_t size, int32_t offset, bool bold = false) {
+    setPlayerInfoFont(size);
+    int lh = tft.fontHeight() + 4;
+    if (!ensureInfoLineSprite(lh)) {
+        tft.setTextDatum(TL_DATUM);
+        tft.setTextColor(color, COL_BG);
+        tft.setClipRect(x, y, w, lh);
+        tft.fillRect(x, y, w, lh, COL_BG);
+        if (!txt || !txt[0]) {
+            tft.clearClipRect();
+            return;
+        }
+        int tw = tft.textWidth(txt);
+        if (tw + 4 <= w || offset == 0) {
+            tft.drawString(txt, x + 2, y + 2);
+            if (bold) tft.drawString(txt, x + 3, y + 2);
+        } else {
+            tft.drawString(txt, x + 2 - offset, y + 2);
+            if (bold) tft.drawString(txt, x + 3 - offset, y + 2);
+        }
+        tft.clearClipRect();
+        return;
+    }
+    g_infoLineSprite.fillSprite(COL_BG);
+    g_infoLineSprite.setFont(tft.getFont());
+    g_infoLineSprite.setTextSize(1);
+    g_infoLineSprite.setTextDatum(TL_DATUM);
+    g_infoLineSprite.setTextColor(color, COL_BG);
+    if (!txt || !txt[0]) {
+        g_infoLineSprite.pushSprite(x, y);
+        return;
+    }
+    int tw = g_infoLineSprite.textWidth(txt);
+    if (tw + 4 <= w || offset == 0) {
+        g_infoLineSprite.drawString(txt, 2, 2);
+        if (bold) g_infoLineSprite.drawString(txt, 3, 2);
+    } else {
+        g_infoLineSprite.drawString(txt, 2 - offset, 2);
+        if (bold) g_infoLineSprite.drawString(txt, 3 - offset, 2);
+    }
+    g_infoLineSprite.pushSprite(x, y);
 }
 
 static void drawPlayerHeader(const char* playerName, bool playing) {
@@ -567,6 +688,13 @@ static void drawCoverPlaceholder() {
     tft.drawFastHLine(cx - 32, cy - 30, 32, COL_MID);
 }
 
+static void drawCoverImage(const uint8_t* buf, size_t len) {
+    tft.fillRect(PL_COVER_X, PL_COVER_Y, PL_COVER_W, PL_COVER_H, COL_BG);
+    if (buf && len > 0) {
+        tft.drawJpg(buf, (uint32_t)len, PL_COVER_X, PL_COVER_Y, PL_COVER_W, PL_COVER_H);
+    }
+}
+
 static void drawProgressBar(int position, int duration) {
     int y  = PL_PROG_Y + 2;
     int h  = PL_PROG_H - 4;
@@ -607,29 +735,23 @@ static void drawProgressBar(int position, int duration) {
 static void drawTransportButtons(bool playing) {
     tft.fillRect(0, PL_TRANS_Y, DISPLAY_WIDTH, PL_TRANS_H, COL_BG);
     int cy = PL_TRANS_CY;                          // = 210 + 36 = 246
-    drawCircleBtn( 90, cy, 28, COL_DARK, COL_WHITE, "|<");
-    uint32_t playBg = playing ? (uint32_t)COL_DARK  : (uint32_t)COL_GREEN;
+    drawCircleBtn( 90, cy, 29, (uint32_t)0x3A3A3A, COL_WHITE, "prev");
+    uint32_t playBg = playing ? (uint32_t)0x3A3A3A : (uint32_t)COL_GREEN;
     uint32_t playFg = playing ? (uint32_t)COL_GREEN : (uint32_t)COL_BG;
-    drawCircleBtn(240, cy, 33, playBg, playFg, playing ? "||" : ">");
-    drawCircleBtn(390, cy, 28, COL_DARK, COL_WHITE, ">|");
+    drawCircleBtn(240, cy, 35, playBg, playFg, playing ? "pause" : "play");
+    drawCircleBtn(390, cy, 29, (uint32_t)0x3A3A3A, COL_WHITE, "next");
 }
 
 // Einmalig beim Screen-Aufbau: nur Buttons zeichnen
 static void drawVolumeButtons() {
     int y = PL_VOL_Y, h = PL_VOL_H;
-    tft.setFont(nullptr); tft.setTextSize(2); tft.setTextDatum(MC_DATUM);
-    tft.fillRoundRect(4, y + 2, 40, h - 4, 4, COL_DARK);
-    tft.drawRoundRect(4, y + 2, 40, h - 4, 4, COL_MID);
-    tft.setTextColor(COL_WHITE, COL_DARK);
-    tft.drawString("-", 24, y + h / 2);
-    tft.fillRoundRect(DISPLAY_WIDTH - 44, y + 2, 40, h - 4, 4, COL_DARK);
-    tft.drawRoundRect(DISPLAY_WIDTH - 44, y + 2, 40, h - 4, 4, COL_MID);
-    tft.drawString("+", DISPLAY_WIDTH - 24, y + h / 2);
+    drawVolumeIcon(4, y + 2, 40, h - 4, (uint32_t)0x3A3A3A, COL_WHITE, false);
+    drawVolumeIcon(DISPLAY_WIDTH - 44, y + 2, 40, h - 4, (uint32_t)0x3A3A3A, COL_WHITE, true);
 }
 
 static void drawVolumeRow(int volume) {
     int y = PL_VOL_Y, h = PL_VOL_H;
-    int real_pct = (volume <= 6) ? 0 : constrain((int)roundf((volume - 6) * 100.0f / 94.0f), 0, 100);
+    int real_pct = constrain(volume, 0, 100);
     int bx = 48, bw = DISPLAY_WIDTH - 96;
     int filled = constrain(real_pct * bw / 100, 0, bw);
 
@@ -670,27 +792,49 @@ static void drawModeRow(int repeat, int shuffle) {
     const char* sL = (shuffle >= 0 && shuffle <= 2) ? shfTxt[shuffle] : "Zuf";
     bool rAct = repeat  > 0;
     bool sAct = shuffle > 0;
-    uint32_t rBg = rAct ? (uint32_t)COL_ACTIVE : (uint32_t)COL_HDR;
-    uint32_t sBg = sAct ? (uint32_t)COL_ACTIVE : (uint32_t)COL_HDR;
-    tft.fillRoundRect(2,   y + 1, 236, h - 2, 3, rBg);
-    tft.setFont(nullptr); tft.setTextSize(2); tft.setTextDatum(MC_DATUM);
+    uint32_t rBg = rAct ? (uint32_t)0x0F4D22 : (uint32_t)0x363636;
+    uint32_t sBg = sAct ? (uint32_t)0x0F4D22 : (uint32_t)0x363636;
+    uint32_t rBorder = rAct ? COL_GREEN : COL_LGREY;
+    uint32_t sBorder = sAct ? COL_GREEN : COL_LGREY;
+    uint32_t rIconBg = rAct ? (uint32_t)0x19A347 : (uint32_t)0x555555;
+    uint32_t sIconBg = sAct ? (uint32_t)0x19A347 : (uint32_t)0x555555;
+
+    tft.fillRoundRect(4,   y + 3, 232, h - 4, 7, (uint32_t)0x101010);
+    tft.fillRoundRect(2,   y + 1, 236, h - 2, 7, rBg);
+    tft.drawRoundRect(2,   y + 1, 236, h - 2, 7, rBorder);
+    tft.fillCircle(28, y + h / 2, 12, rIconBg);
+    tft.drawCircle(28, y + h / 2, 12, COL_WHITE);
+    drawRepeatGlyph(17, y + h / 2 - 5, COL_WHITE);
+    tft.setFont(nullptr); tft.setTextSize(2); tft.setTextDatum(ML_DATUM);
     tft.setTextColor(COL_WHITE, rBg);
-    tft.drawString(rL, 120, y + h / 2);
-    tft.fillRoundRect(242, y + 1, 236, h - 2, 3, sBg);
+    tft.drawString(rL, 48, y + h / 2);
+
+    tft.fillRoundRect(244, y + 3, 232, h - 4, 7, (uint32_t)0x101010);
+    tft.fillRoundRect(242, y + 1, 236, h - 2, 7, sBg);
+    tft.drawRoundRect(242, y + 1, 236, h - 2, 7, sBorder);
+    tft.fillCircle(268, y + h / 2, 12, sIconBg);
+    tft.drawCircle(268, y + h / 2, 12, COL_WHITE);
+    drawShuffleGlyph(257, y + h / 2 - 6, COL_WHITE);
     tft.setTextColor(COL_WHITE, sBg);
-    tft.drawString(sL, 360, y + h / 2);
+    tft.drawString(sL, 288, y + h / 2);
 }
 
 // ── Async Cover-Download (FreeRTOS-Task auf Core 0) ─────────────────────────
 
 static void coverDlTask(void*) {
-    uint32_t myGen = g_dlGen;
+    uint32_t myGen;
+    String pendingUrl;
+    xSemaphoreTake(g_coverMux, portMAX_DELAY);
+    myGen = g_dlGen;
+    pendingUrl = g_pendingCoverUrl;
+    xSemaphoreGive(g_coverMux);
     size_t total = 0;
-    if (g_coverBuf) {
+    bool jpegOk = false;
+    if (g_coverDlBuf) {
         HTTPClient http;
-        srvLog("[cover] URL: %s", g_pendingCoverUrl.c_str());
+        srvLog("[cover] URL: %s", pendingUrl.c_str());
         http.setTimeout(3000);
-        if (http.begin(g_pendingCoverUrl)) {
+        if (http.begin(pendingUrl)) {
             int httpCode = http.GET();
             srvLog("[cover] HTTP %d", httpCode);
             if (httpCode == 200) {
@@ -699,11 +843,11 @@ static void coverDlTask(void*) {
                 while ((http.connected() || s->available()) &&
                        total < 131070 && millis() - t0 < 4000) {
                     size_t av = s->available();
-                    if (av) total += s->readBytes(g_coverBuf + total,
+                    if (av) total += s->readBytes(g_coverDlBuf + total,
                                                    min(av, (size_t)(131070 - total)));
                     else vTaskDelay(1);
                 }
-                bool jpegOk = (total >= 2 && g_coverBuf[0] == 0xFF && g_coverBuf[1] == 0xD8);
+                jpegOk = (total >= 2 && g_coverDlBuf[0] == 0xFF && g_coverDlBuf[1] == 0xD8);
                 srvLog("[cover] %d bytes, JPEG=%s", (int)total, jpegOk ? "ok" : "NEIN");
             }
             http.end();
@@ -712,19 +856,48 @@ static void coverDlTask(void*) {
         }
     }
     // Nur veröffentlichen wenn diese Generation noch aktuell ist
+    xSemaphoreTake(g_coverMux, portMAX_DELAY);
     if (myGen == g_coverGen) {
-        g_coverLen   = total;
+        if (jpegOk && total > 0) {
+            memcpy(g_coverBuf, g_coverDlBuf, total);
+            g_coverLen = total;
+        } else {
+            g_coverLen = 0;
+        }
         g_coverReady = true;
+        g_coverSerial++;
         // Für nächsten Boot cachen (beide Cores lesen nur g_coverBuf → kein Konflikt)
-        File f = LittleFS.open("/cover.jpg", "w");
-        if (f) { f.write(g_coverBuf, total); f.close(); }
+        if (jpegOk && total > 0) {
+            File f = LittleFS.open("/cover.jpg", "w");
+            if (f) { f.write(g_coverBuf, total); f.close(); }
+        }
     }
     g_coverTask = nullptr;
+    xSemaphoreGive(g_coverMux);
     vTaskDelete(nullptr);
 }
 
-const uint8_t* displayGetCoverBuf() { return g_coverBuf; }
-size_t         displayGetCoverLen() { return (size_t)g_coverLen; }
+bool displayCopyCover(std::vector<uint8_t>& out) {
+    out.clear();
+    if (!g_coverMux || !g_coverBuf) return false;
+    xSemaphoreTake(g_coverMux, portMAX_DELAY);
+    size_t len = (size_t)g_coverLen;
+    bool valid = len >= 2;
+    if (valid) {
+        out.resize(len);
+        memcpy(out.data(), g_coverBuf, len);
+    }
+    xSemaphoreGive(g_coverMux);
+    return valid;
+}
+
+uint32_t displayGetCoverSerial() {
+    if (!g_coverMux) return 0;
+    xSemaphoreTake(g_coverMux, portMAX_DELAY);
+    uint32_t serial = g_coverSerial;
+    xSemaphoreGive(g_coverMux);
+    return serial;
+}
 
 static String g_coverDrawnForTitle; // Titel des zuletzt auf dem Display gezeichneten Covers
 static bool   g_coverPredrawn = false; // Cover in displayDrawPlayerScreen() vorgezeichnet
@@ -740,7 +913,11 @@ static void prefetchTask(void*) {
             break;
         }
         String url = g_pfQueue[0];
-        for (int i = 1; i < g_pfQueueCount; i++) g_pfQueue[i - 1] = g_pfQueue[i];
+        String key = g_pfQueueKeys[0];
+        for (int i = 1; i < g_pfQueueCount; i++) {
+            g_pfQueue[i - 1] = g_pfQueue[i];
+            g_pfQueueKeys[i - 1] = g_pfQueueKeys[i];
+        }
         g_pfQueueCount--;
         xSemaphoreGive(g_pfMux);
 
@@ -790,6 +967,7 @@ static void prefetchTask(void*) {
             g_pf[slot].len   = total;
             g_pf[slot].ready = true;
             g_pf[slot].url   = url;
+            g_pf[slot].key   = key;
             srvLog("[pf] Slot %d: %d B", slot, (int)total);
         }
         xSemaphoreGive(g_pfMux);
@@ -799,21 +977,26 @@ static void prefetchTask(void*) {
 }
 
 // Aus beliebigem Task aufrufbar (z.B. lmsPoll) — befüllt Prefetch-Queue
-void displayQueuePrefetch(const String* urls, int count) {
+void displayQueuePrefetch(const String* urls, const String* keys, int count) {
     if (!g_pfMux || count <= 0) return;
     xSemaphoreTake(g_pfMux, portMAX_DELAY);
     g_pfQueueCount = 0;
     for (int i = 0; i < count && i < SQUEEZE_PREFETCH; i++) {
         if (urls[i].isEmpty()) continue;
+        String key = (keys && !keys[i].isEmpty()) ? keys[i] : urls[i];
         // Schon vorhanden oder bereits fertig im Slot → überspringen
         bool skip = false;
         for (int j = 0; j < SQUEEZE_PREFETCH; j++) {
-            if (g_pf[j].ready && g_pf[j].url == urls[i]) { skip = true; break; }
+            if (g_pf[j].ready && g_pf[j].key == key) { skip = true; break; }
         }
         for (int j = 0; j < g_pfQueueCount && !skip; j++) {
-            if (g_pfQueue[j] == urls[i]) skip = true;
+            if (g_pfQueueKeys[j] == key) skip = true;
         }
-        if (!skip) g_pfQueue[g_pfQueueCount++] = urls[i];
+        if (!skip) {
+            g_pfQueue[g_pfQueueCount] = urls[i];
+            g_pfQueueKeys[g_pfQueueCount] = key;
+            g_pfQueueCount++;
+        }
     }
     bool needTask = (g_pfQueueCount > 0 && g_pfTask == nullptr);
     xSemaphoreGive(g_pfMux);
@@ -825,22 +1008,30 @@ void displayQueuePrefetch(const String* urls, int count) {
 }
 
 // Aus beliebigem Task aufrufbar (z.B. lmsPoll auf Core 0) — startet Cover-Download sofort
-void displayPreloadCover(const String& url) {
-    if (url.isEmpty() || !g_coverBuf) return;
-    if (g_coverTask != nullptr) return;           // Download läuft bereits
-    if (g_dispatchedCoverUrl == url && (g_coverReady || g_coverLen > 0)) return; // schon geladen
+void displayPreloadCover(const String& url, const String& cacheKey) {
+    if (url.isEmpty() || !g_coverBuf || !g_coverDlBuf) return;
+    String key = cacheKey.isEmpty() ? url : cacheKey;
+    xSemaphoreTake(g_coverMux, portMAX_DELAY);
+    bool coverTaskRunning = (g_coverTask != nullptr);
+    bool alreadyLoaded = (g_dispatchedCoverUrl == url && g_coverLen > 0);
+    xSemaphoreGive(g_coverMux);
+    if (coverTaskRunning || alreadyLoaded) return; // Download läuft bereits / schon geladen
 
     // Prefetch-Cache prüfen — Cover bereits vorhanden?
     if (g_pfMux) {
         xSemaphoreTake(g_pfMux, portMAX_DELAY);
         for (int i = 0; i < SQUEEZE_PREFETCH; i++) {
-            if (g_pf[i].ready && g_pf[i].url == url && g_pf[i].len > 0) {
+            if (g_pf[i].ready && g_pf[i].key == key && g_pf[i].len > 0) {
+                xSemaphoreTake(g_coverMux, portMAX_DELAY);
                 memcpy(g_coverBuf, g_pf[i].buf, g_pf[i].len);
                 g_coverLen           = g_pf[i].len;
                 g_dCoverUrl          = url;
+                g_dCoverKey          = key;
                 g_dispatchedCoverUrl = url;
                 g_coverReady         = true;
+                g_coverSerial++;
                 g_pf[i].ready        = false; // Slot freigeben
+                xSemaphoreGive(g_coverMux);
                 xSemaphoreGive(g_pfMux);
                 srvLog("[cover] Prefetch-Hit Slot %d: %d B", i, (int)g_coverLen);
                 return;
@@ -850,13 +1041,18 @@ void displayPreloadCover(const String& url) {
     }
 
     // Kein Cache-Hit → normaler Download
+    xSemaphoreTake(g_coverMux, portMAX_DELAY);
     g_dCoverUrl          = url;
+    g_dCoverKey          = key;
     g_pendingCoverUrl    = url;
     g_dlGen              = ++g_coverGen;
     g_dispatchedCoverUrl = url;
     g_coverReady         = false;
+    g_coverLen           = 0;
+    g_coverSerial++;
     xTaskCreatePinnedToCore(coverDlTask, "cover", 8192,
                             nullptr, 1, (TaskHandle_t*)&g_coverTask, 0);
+    xSemaphoreGive(g_coverMux);
     srvLog("[cover] Preload gestartet (früh)");
 }
 
@@ -1025,11 +1221,13 @@ static void handleSettingsTouch(int32_t tx, int32_t ty) {
 
 void displayDrawPlayerScreen() {
     g_screen = SCREEN_PLAYER;
+    xSemaphoreTake(g_coverMux, portMAX_DELAY);
     bool hadCover = g_coverLen > 0; // Cache oder frisch vorgeladenes Cover
 
     g_dTitle = g_dArtist = g_dAlbum = g_dCoverUrl = g_dPlayer = "";
+    g_dCoverKey = "";
     g_dPlaying = false; g_dVolume = g_dRepeat = g_dShuffle = -1;
-    g_dPosition = -1;   g_dDuration = 0;
+    g_dPosition = -1;   g_dDuration = 0; g_dTrackNum = -1;
     g_lastProgFilled = -1;
     g_lastVolFilled  = -1;
     g_scrollOff[0] = g_scrollOff[1] = g_scrollOff[2] = 0;
@@ -1040,14 +1238,16 @@ void displayDrawPlayerScreen() {
         g_coverReady = false;
         g_coverLen   = 0;
     }
+    xSemaphoreGive(g_coverMux);
 
     tft.fillScreen(COL_BG);
     drawPlayerHeader("Squeezie", false);
     if (hadCover) {
+        xSemaphoreTake(g_coverMux, portMAX_DELAY);
         g_coverReady    = false;
         g_coverPredrawn = true;
-        tft.drawJpg(g_coverBuf, (uint32_t)g_coverLen,
-                    PL_COVER_X, PL_COVER_Y, PL_COVER_W, PL_COVER_H);
+        drawCoverImage(g_coverBuf, g_coverLen);
+        xSemaphoreGive(g_coverMux);
         srvLog("[cover] Preload sofort gezeichnet (%d bytes)", (int)g_coverLen);
     } else {
         drawCoverPlaceholder();
@@ -1066,17 +1266,27 @@ void displayUpdatePlayer() {
     const SqueezieStatus& s = squeezieGetCachedStatus();
 
     // Fertiges Cover zeichnen (asynchron heruntergeladen)
-    if (g_coverReady) {
+    xSemaphoreTake(g_coverMux, portMAX_DELAY);
+    bool coverReady = g_coverReady;
+    bool coverTaskRunning = (g_coverTask != nullptr);
+    bool alreadyDispatched = (g_dispatchedCoverUrl == g_dCoverUrl);
+    size_t coverLen = g_coverLen;
+    xSemaphoreGive(g_coverMux);
+    if (coverReady) {
+        xSemaphoreTake(g_coverMux, portMAX_DELAY);
         g_coverReady = false;
         if (g_coverLen > 0) {
             srvLog("[cover] drawJpg %d bytes", (int)g_coverLen);
-            tft.drawJpg(g_coverBuf, (uint32_t)g_coverLen,
-                        PL_COVER_X, PL_COVER_Y, PL_COVER_W, PL_COVER_H);
+            drawCoverImage(g_coverBuf, g_coverLen);
             g_coverDrawnForTitle = s.title;
         } else {
             srvLog("[cover] kein Bild, Placeholder");
             drawCoverPlaceholder();
         }
+        coverTaskRunning = (g_coverTask != nullptr);
+        alreadyDispatched = (g_dispatchedCoverUrl == g_dCoverUrl);
+        coverLen = g_coverLen;
+        xSemaphoreGive(g_coverMux);
     }
 
     // Preloaded-Cover: beim ersten bekannten Titel als gezeichnet markieren → kein Re-Download
@@ -1087,35 +1297,56 @@ void displayUpdatePlayer() {
 
     // Cover neu laden wenn URL oder Titel wechselt.
     bool coverUrlChanged = (s.coverUrl != g_dCoverUrl && !s.coverUrl.isEmpty());
+    bool coverKeyChanged = (s.coverKey != g_dCoverKey && !s.coverKey.isEmpty());
     bool titleChanged    = (!s.title.isEmpty() && s.title != g_coverDrawnForTitle);
-    if (coverUrlChanged || (titleChanged && g_coverTask == nullptr)) {
+    if (coverUrlChanged || coverKeyChanged || (titleChanged && !coverTaskRunning)) {
         if (coverUrlChanged) g_dCoverUrl = s.coverUrl;
+        if (coverKeyChanged) g_dCoverKey = s.coverKey;
+        xSemaphoreTake(g_coverMux, portMAX_DELAY);
         g_coverGen++;
-        g_dispatchedCoverUrl = ""; // nur Dispatch-State zurücksetzen — g_coverReady/Len noch behalten
+        g_dispatchedCoverUrl = "";
         if (s.coverUrl.isEmpty()) {
             g_coverReady = false;
             g_coverLen   = 0;
+            g_coverSerial++;
+            xSemaphoreGive(g_coverMux);
+            drawCoverPlaceholder();
+        } else {
+            g_coverReady = false;
+            g_coverLen   = 0;
+            xSemaphoreGive(g_coverMux);
             drawCoverPlaceholder();
         }
     }
     // Download starten wenn URL gesetzt, Puffer da, kein Task läuft und noch nicht dispatcht
-    if (!g_dCoverUrl.isEmpty() && g_coverBuf && g_coverTask == nullptr
-            && g_dispatchedCoverUrl != g_dCoverUrl) {
+    xSemaphoreTake(g_coverMux, portMAX_DELAY);
+    coverTaskRunning = (g_coverTask != nullptr);
+    alreadyDispatched = (g_dispatchedCoverUrl == g_dCoverUrl);
+    coverReady = g_coverReady;
+    coverLen = g_coverLen;
+    xSemaphoreGive(g_coverMux);
+    if (!g_dCoverUrl.isEmpty() && g_coverBuf && !coverTaskRunning && !alreadyDispatched) {
         // Bereits bereit? (Prefetch-Hit via displayPreloadCover oder Preload)
-        if (g_coverReady && g_coverLen > 0) {
+        if (coverReady && coverLen > 0) {
+            xSemaphoreTake(g_coverMux, portMAX_DELAY);
             g_dispatchedCoverUrl = g_dCoverUrl; // kein Download nötig
+            xSemaphoreGive(g_coverMux);
         } else {
             // Prefetch-Cache direkt prüfen
             bool pfHit = false;
             if (g_pfMux) {
                 xSemaphoreTake(g_pfMux, portMAX_DELAY);
+                String wantedKey = g_dCoverKey.isEmpty() ? g_dCoverUrl : g_dCoverKey;
                 for (int i = 0; i < SQUEEZE_PREFETCH; i++) {
-                    if (g_pf[i].ready && g_pf[i].url == g_dCoverUrl && g_pf[i].len > 0) {
+                    if (g_pf[i].ready && g_pf[i].key == wantedKey && g_pf[i].len > 0) {
+                        xSemaphoreTake(g_coverMux, portMAX_DELAY);
                         memcpy(g_coverBuf, g_pf[i].buf, g_pf[i].len);
                         g_coverLen           = g_pf[i].len;
                         g_dispatchedCoverUrl = g_dCoverUrl;
                         g_coverReady         = true;
+                        g_coverSerial++;
                         g_pf[i].ready        = false;
+                        xSemaphoreGive(g_coverMux);
                         pfHit                = true;
                         srvLog("[cover] UpdatePlayer Prefetch-Hit %d B", (int)g_coverLen);
                         break;
@@ -1124,6 +1355,7 @@ void displayUpdatePlayer() {
                 xSemaphoreGive(g_pfMux);
             }
             if (!pfHit) {
+                xSemaphoreTake(g_coverMux, portMAX_DELAY);
                 g_coverReady         = false;
                 g_coverLen           = 0;
                 g_pendingCoverUrl    = g_dCoverUrl;
@@ -1131,6 +1363,7 @@ void displayUpdatePlayer() {
                 g_dispatchedCoverUrl = g_dCoverUrl;
                 xTaskCreatePinnedToCore(coverDlTask, "cover", 8192,
                                         nullptr, 1, (TaskHandle_t*)&g_coverTask, 0);
+                xSemaphoreGive(g_coverMux);
             }
         }
     }
@@ -1161,32 +1394,32 @@ void displayUpdatePlayer() {
         int cy = PL_TRANS_CY;
         uint32_t bg = s.playing ? (uint32_t)COL_DARK  : (uint32_t)COL_GREEN;
         uint32_t fg = s.playing ? (uint32_t)COL_GREEN : (uint32_t)COL_BG;
-        drawCircleBtn(240, cy, 33, bg, fg, s.playing ? "||" : ">");
+        drawCircleBtn(240, cy, 35, bg, fg, s.playing ? "pause" : "play");
         tft.fillCircle(DISPLAY_WIDTH - 85, PL_HDR_H / 2, 5,
                         s.playing ? (uint32_t)COL_GREEN : (uint32_t)COL_MID);
         g_dPlaying = s.playing;
     }
 
-    // Textinfo: Layout (y relativ zu PL_INFO_Y=32): Titel size3(28px), Künstler size2(20px),
-    // Album size2(20px), Track size2(20px). Passt in 128px Cover-Höhe.
+    // Textinfo: Titel / Künstler / Album scrollen, Track-Zeile sitzt bewusst tiefer,
+    // damit sie von den größeren Unicode-Fonts nicht überzeichnet wird.
     bool infoChanged = (s.title != g_dTitle || s.artist != g_dArtist || s.album != g_dAlbum);
     if (infoChanged) {
+        tft.fillRect(PL_INFO_X, PL_INFO_Y, PL_INFO_W, 116, COL_BG);
         // Scroll-Offsets bei Titelwechsel zurücksetzen
         g_scrollOff[0] = g_scrollOff[1] = g_scrollOff[2] = 0;
         g_scrollLast = millis();
         g_dTitle  = s.title;  g_dArtist  = s.artist;  g_dAlbum  = s.album;
-        g_dTitleD = utf8ToAscii(s.title);
-        g_dArtistD = utf8ToAscii(s.artist);
-        g_dAlbumD  = utf8ToAscii(s.album);
+        g_dTitleD = s.title;
+        g_dArtistD = s.artist;
+        g_dAlbumD  = s.album;
     }
 
     // Textbreiten cachen — nur bei Titelwechsel neu messen
     static int s_tw0 = 0, s_tw1 = 0, s_tw2 = 0;
     if (infoChanged) {
-        tft.setFont(nullptr);
-        tft.setTextSize(3); s_tw0 = tft.textWidth(g_dTitleD.c_str());
-        tft.setTextSize(2); s_tw1 = tft.textWidth(g_dArtistD.c_str());
-                            s_tw2 = tft.textWidth(g_dAlbumD.c_str());
+        setPlayerInfoFont(3); s_tw0 = tft.textWidth(g_dTitleD.c_str());
+        setPlayerInfoFont(2); s_tw1 = tft.textWidth(g_dArtistD.c_str());
+                             s_tw2 = tft.textWidth(g_dAlbumD.c_str());
     }
 
     // Scroll-Tick: Fraktionaler Akkumulator → funktioniert für alle scrollMs-Werte
@@ -1213,15 +1446,16 @@ void displayUpdatePlayer() {
     }
 
     // Nicht-scrollende Zeilen nur bei Inhaltswechsel zeichnen → kein Flackern
-    if (infoChanged || (doScroll && l0)) drawScrollLine(g_dTitleD.c_str(),  PL_INFO_X, PL_INFO_Y + 2,  PL_INFO_W, COL_WHITE, 3, g_scrollOff[0]);
-    if (infoChanged || (doScroll && l1)) drawScrollLine(g_dArtistD.c_str(), PL_INFO_X, PL_INFO_Y + 34, PL_INFO_W, COL_GREEN, 2, g_scrollOff[1]);
-    if (infoChanged || (doScroll && l2)) drawScrollLine(g_dAlbumD.c_str(),  PL_INFO_X, PL_INFO_Y + 58, PL_INFO_W, COL_LGREY, 2, g_scrollOff[2]);
-    if (s.duration != g_dDuration) {
+    if (infoChanged || (doScroll && l0)) drawPlayerScrollLine(g_dTitleD.c_str(),  PL_INFO_X, PL_INFO_Y + 2,  PL_INFO_W, COL_WHITE, 3, g_scrollOff[0], true);
+    if (infoChanged || (doScroll && l1)) drawPlayerScrollLine(g_dArtistD.c_str(), PL_INFO_X, PL_INFO_Y + 34, PL_INFO_W, COL_GREEN, 2, g_scrollOff[1]);
+    if (infoChanged || (doScroll && l2)) drawPlayerScrollLine(g_dAlbumD.c_str(),  PL_INFO_X, PL_INFO_Y + 58, PL_INFO_W, COL_LGREY, 2, g_scrollOff[2]);
+    if (infoChanged || s.duration != g_dDuration || s.trackNum != g_dTrackNum) {
         char buf[32];
         snprintf(buf, sizeof(buf), "Track %d  |  %d:%02d",
                  s.trackNum, s.duration / 60, s.duration % 60);
-        drawInfoLine(buf, PL_INFO_X, PL_INFO_Y + 82, PL_INFO_W, COL_MGREY, 2);
+        drawInfoLine(buf, PL_INFO_X, PL_INFO_Y + 92, PL_INFO_W, COL_MGREY, 2);
         g_dDuration = s.duration;
+        g_dTrackNum = s.trackNum;
     }
 
     // Neue LMS-Position → Interpolationsbasis resetten
@@ -1257,6 +1491,8 @@ void displayUpdatePlayer() {
 void displayShowOTA(int pct) {
     g_screen = SCREEN_STARTUP; // verhindert displayUpdatePlayer() im Loop
     static bool drawn = false;
+    if (pct < 0) pct = 0;
+    if (pct > 100) pct = 100;
     if (!drawn) {
         drawn = true;
         tft.fillScreen(COL_BG);
@@ -1370,29 +1606,34 @@ void displayHandleTouch() {
         // Transport-Buttons (Kreise, Radien angepasst auf neue Größe)
         int cy = PL_TRANS_CY;
         if ((long)(tx - 90) * (tx - 90) + (long)(ty - cy) * (ty - cy) <= 28L * 28L) {
-            squeezePrev(mac);
+            if (squeezePrev(mac)) wifiForceRepoll();
         } else if ((long)(tx - 390) * (tx - 390) + (long)(ty - cy) * (ty - cy) <= 28L * 28L) {
-            squeezeNext(mac);
+            if (squeezeNext(mac)) wifiForceRepoll();
         } else if ((long)(tx - 240) * (tx - 240) + (long)(ty - cy) * (ty - cy) <= 33L * 33L) {
-            if (g_dPlaying) squeezePause(mac); else squeezePlay(mac);
+            bool ok = g_dPlaying ? squeezePause(mac) : squeezePlay(mac);
+            if (ok) wifiForceRepoll();
         }
         // Fortschrittsbalken: Seek
         else if (ty >= PL_PROG_Y && ty < PL_TRANS_Y && g_dDuration > 0) {
             int seekPos = (int)((long)tx * g_dDuration / DISPLAY_WIDTH);
-            squeezeSeek(mac, constrain(seekPos, 0, g_dDuration));
+            if (squeezeSeek(mac, constrain(seekPos, 0, g_dDuration))) wifiForceRepoll();
         }
         // Modus-Buttons
         else if (ty >= PL_MODE_Y) {
             if (tx < 240) {
                 int next = (max(0, g_dRepeat) + 1) % 3;
-                squeezeSetRepeat(mac, next);
-                g_dRepeat = next;
-                drawModeRow(g_dRepeat, g_dShuffle);
+                if (squeezeSetRepeat(mac, next)) {
+                    g_dRepeat = next;
+                    drawModeRow(g_dRepeat, g_dShuffle);
+                    wifiForceRepoll();
+                }
             } else {
                 int next = (max(0, g_dShuffle) + 1) % 3;
-                squeezeSetShuffle(mac, next);
-                g_dShuffle = next;
-                drawModeRow(g_dRepeat, g_dShuffle);
+                if (squeezeSetShuffle(mac, next)) {
+                    g_dShuffle = next;
+                    drawModeRow(g_dRepeat, g_dShuffle);
+                    wifiForceRepoll();
+                }
             }
         }
     }
@@ -1406,17 +1647,21 @@ void displayHandleTouch() {
         if (inBar) {
             // Direkt nach Touch-Position setzen (stufenlos)
             int pct = constrain((tx - bx) * 100 / bw, 0, 100);
-            int vol = (pct == 0) ? 0 : (pct * 94 / 100 + 6);
             if (!volHeld || millis() - volHoldT0 > 80) {
-                squeezeSetVolume(wifiGetPlayerMac(), vol);
-                volHeld   = true;
-                volHoldT0 = millis();
+                if (squeezeSetVolume(wifiGetPlayerMac(), pct)) {
+                    wifiForceRepoll();
+                    volHeld   = true;
+                    volHoldT0 = millis();
+                }
             }
         } else if (inVolMinus || inVolPlus) {
             if (!volHeld || millis() - volHoldT0 > 250) {
-                squeezeAdjustVolume(wifiGetPlayerMac(), inVolMinus ? -1 : 1);
-                volHeld   = true;
-                volHoldT0 = millis();
+                int nextVolume = constrain(g_dVolume + (inVolMinus ? -1 : 1), 0, 100);
+                if (squeezeSetVolume(wifiGetPlayerMac(), nextVolume)) {
+                    wifiForceRepoll();
+                    volHeld   = true;
+                    volHoldT0 = millis();
+                }
             }
         } else { volHeld = false; }
     } else { volHeld = false; }

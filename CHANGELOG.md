@@ -6,6 +6,121 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 
 ## [Unreleased]
 
+## [0.3.3] — 2026-04-06
+
+### Behoben
+- **Lautstärke-Skala vereinheitlicht**: UI, Touch und Web arbeiten jetzt durchgängig mit
+  `0..100`, während der LMS intern weiter `6..100` erhält; die Umrechnung ist zentralisiert,
+  sodass z. B. UI `18` sauber auf LMS `23` abgebildet wird.
+- **Lautstärke-Anzeige aus LMS-Status korrigiert**: vom LMS gelesene Lautstärkewerte werden
+  nicht mehr fälschlich erneut umgerechnet; dadurch stimmen Anzeige auf ESP und Apps jetzt
+  wieder überein.
+- **`/api/control` meldet Fehler korrekt**: Web-Befehle liefern jetzt bei fehlgeschlagenen
+  LMS-Kommandos ein `ok:false` statt stillschweigend Erfolg zu melden.
+- **Cover-Auslieferung threadsicherer**: `/api/cover` liefert jetzt ein Snapshot des JPEGs aus,
+  statt direkt auf einen gleichzeitig beschriebenen globalen Puffer zuzugreifen.
+- **Log-Ringpuffer robuster**: gleichzeitige Zugriffe aus mehreren Tasks/Cores werden jetzt
+  synchronisiert, damit Logeinträge nicht ineinanderlaufen.
+- **WLAN-Start nach Power-On/Flash robuster**: der WiFi-Stack wird vor STA/AP-Start sauber
+  zurückgesetzt, mit kurzen Delays zwischen Mode-Wechseln; zusätzlich gibt es einen zweiten
+  STA-Startversuch und einen Retry für `softAP()`, bevor aufgegeben wird.
+- **Player-Buttons optisch überarbeitet**: Display-Transport- und Lautstärke-Buttons sind jetzt
+  heller, kontrastreicher und verwenden vertrautere Player-Glyphen statt schwer lesbarer Text-
+  Labels.
+- **Webinterface: Lautstärke-Icons verbessert**: die ungewöhnlichen bisherigen Pfeil-/Balken-
+  Symbole wurden durch klassische Lautsprecher-Symbole ersetzt; außerdem wurden die Buttons
+  insgesamt heller und plastischer gestaltet.
+- **Display: Mode-Buttons überarbeitet**: Wiederholen und Zufall erscheinen jetzt als klarere
+  Taster mit besserem Kontrast, Rand, Schatten und kleinen Symbolen, passend zu den übrigen
+  Bedienelementen.
+- **Display: Text-Redraw im Info-Bereich korrigiert**: Textzeilen werden vor dem Neuzeichnen
+  jetzt vollständig innerhalb ihres Clip-Bereichs gelöscht, damit keine schwarzen Balken oder
+  Reste in benachbarte Bereiche hineinwirken.
+- **Display: Lautstärke- und Mode-Icons vereinfacht und repariert**: die problematischen
+  Symbolzeichnungen wurden auf robustere Primitive umgestellt; außerdem liegen die Lautstärke-
+  Buttons jetzt vollständig in ihrer Zeile und werden nicht mehr von den Mode-Buttons überlagert.
+- **Display: Lautstärke-Icons weiter vereinfacht**: die Symbole wurden auf einen klareren
+  Lautsprecherkörper mit gut lesbarem `-` bzw. `+` reduziert, damit sie auf dem kleinen Display
+  eindeutiger erkennbar sind.
+- **Display-Steuerung und Status-Sync verbessert**: lokale Touch-Kommandos lösen jetzt sofort
+  einen Re-Poll aus, statt bis zum nächsten regulären LMS-Abgleich zu warten; außerdem ist das
+  LMS-Polling reaktionsschneller und loggt Fehlschläge.
+- **Display: Cover-Reste beim Titelwechsel behoben**: vor dem Zeichnen eines neuen Covers wird
+  die komplette Cover-Fläche gelöscht, damit bei anders skalierten oder beschnittenen Bildern
+  keine Pixel des vorherigen Covers stehen bleiben.
+- **Cover-Wechsel robust gegen Mischbilder gemacht**: neue Cover werden jetzt erst in einen
+  separaten Staging-Puffer geladen und erst nach vollständigem JPEG atomar veröffentlicht;
+  dadurch greifen Display und `/api/cover` nie mehr auf halb überschriebene Bilddaten zu.
+- **Cover-Umschaltung auf Placeholder umgestellt**: bei neuem Track wird das alte Cover auf
+  Display und im Web sofort ausgeblendet, bis das neue Bild vollständig vorliegt; so bleiben
+  keine fremden Cover oder Bildreste sichtbar.
+- **Aktuelles Cover an LMS-`current` gebunden**: das Bild des laufenden Tracks wird nicht mehr
+  aus `playlist_loop[0].coverid` gebaut, sondern immer über den playerbezogenen
+  `/music/current/...`-Endpoint geladen; dadurch können vorgezogene Future-Cover bei
+  asynchronen Playlist-Metadaten nicht mehr als aktuelles Cover erscheinen.
+- **OTA-Screen wieder sichtbar gemacht**: der Neustart nach erfolgreichem Web-Update wird jetzt
+  kurz verzögert und die Fortschrittsanzeige im Main-Loop über ein Dirty-Flag zuverlässig
+  gezeichnet; dadurch verschwindet der OTA-Screen nicht mehr durch einen zu frühen Reboot.
+- **OTA-Screen beim Web-Upload sofort sichtbar**: zusätzlich zum Main-Loop wird der OTA-Screen
+  jetzt direkt beim Start des Uploads einmal gezeichnet; dadurch bleibt die Anzeige auch dann
+  nicht mehr auf dem Player-Screen stehen, wenn der Loop-Refresh zu spät kommt.
+- **OTA-Anzeige in den Haupt-Loop verlagert**: Display-Zugriffe laufen beim Web-Upload jetzt
+  nicht mehr aus Async-Web-Callbacks heraus, sondern nur noch kontrolliert aus `loop()`; damit
+  bleibt das Display waehrend OTA nicht mehr einfach auf dem letzten Player-Bild stehen.
+- **Display-Umlaute lesbarer gemacht**: da der verwendete Display-Font kein echtes UTF-8 kann,
+  werden deutsche Umlaute jetzt als `ae/oe/ue` bzw. `Ae/Oe/Ue` transliteriert statt nur den
+  Grundbuchstaben zu zeigen.
+- **Songtexte auf dem Display auf UTF-8-Font umgestellt**: Titel, Artist und Album nutzen jetzt
+  einen Unicode-faehigen LovyanGFX-Font statt der ASCII-Transliteration; dadurch erscheinen
+  Umlaute in Lieddaten wieder als echte Zeichen.
+- **UTF-8-Displayfont wieder vergroessert**: Titel, Artist und Album verwenden jetzt eine
+  deutlich groessere Unicode-Gothic-Schrift, damit die Darstellung wieder naeher an der
+  bisherigen Lesegroesse liegt.
+- **Player-Text nochmals vergroessert**: Titel, Artist und Album wurden jeweils noch eine
+  Font-Stufe hoeher gezogen, damit die Unicode-Darstellung auf dem Display wieder besser lesbar
+  ist.
+- **Player-Info entkoppelt und beruhigt**: die Track-Zeile sitzt jetzt tiefer und wird nicht mehr
+  von den scrollenden Unicode-Zeilen halb ueberschrieben; ausserdem werden die Scroll-Zeilen
+  ueber ein Offscreen-Sprite gezeichnet, was das sichtbare Flackern deutlich reduziert.
+- **Titelanzeige kraeftiger gemacht**: der Titel wird mit derselben Unicode-Schrift leicht
+  ueberzeichnet, damit er wie eine fette Variante wirkt, ohne die UTF-8-Darstellung zu verlieren.
+- **Cover-Preload mit Unicode-/Current-Cover wiederhergestellt**: das aktuelle Cover kann jetzt
+  weiter ueber den LMS-`current`-Endpoint geladen werden, nutzt fuer Prefetch-Treffer aber
+  wieder einen separaten `coverid`-basierten Cache-Key; dadurch erscheinen Cover auf dem
+  Display wieder ohne die bisherige ~4-Sekunden-Wartezeit.
+- **OTA-Screen waehrend Upload hart priorisiert**: solange ein OTA aktiv ist, zeichnet der
+  Haupt-Loop den OTA-Screen jetzt in jeder Runde bevorzugt weiter, statt nur auf neue
+  Prozentwerte zu reagieren; damit soll die Anzeige nicht mehr einfach auf dem alten
+  Player-Bild stehen bleiben.
+- **WLAN nach Flash/Boot selbstheilender gemacht**: wenn zwar `WL_CONNECTED` gemeldet wird, aber
+  direkt danach ueber mehrere Polls kein LMS-Verkehr moeglich ist, wird die WLAN-Verbindung
+  automatisch getrennt und sofort neu aufgebaut statt im scheinbar verbundenen, aber toten
+  Zustand zu verbleiben.
+- **OTA-Upload robuster gemacht**: Web-Updates prüfen jetzt `Update.begin()` und `Update.write()`
+  sauber auf Fehler, zeigen im Fehlerfall einen konkreten Fehlercode an und zeichnen den
+  Fortschritt nicht mehr direkt im Async-Upload-Callback; auch `ArduinoOTA` nutzt jetzt denselben
+  entkoppelten Fortschrittsweg.
+- **OTA-Screen direkt aus dem Upload gespiegelt**: zusätzlich zum Main-Loop wird der Web-OTA-
+  Fortschritt jetzt wieder direkt auf das Display gespiegelt, diesmal sauber gedrosselt und mit
+  eigenem Display-Bus-Zugriff; dadurch soll der OTA-Screen auch dann sichtbar bleiben, wenn der
+  normale `loop()` waehrend des Flashens zu lange blockiert.
+- **Web-OTA auf bekannten Anzeige-Pfad zurückgezogen**: nachdem der entkoppelte OTA-
+  Fortschrittsweg die Anzeige trotzdem nicht mehr sichtbar machte, nutzt der Web-Upload jetzt
+  wieder den zuletzt funktionierenden direkten `displayShowOTA()`-Pfad pro Prozentpunkt; die
+  Fehlerpruefung von `Update.begin()`/`Update.write()` und der verzoegerte Neustart bleiben
+  dabei erhalten.
+- **Externer Play/Pause-Taster vorbereitet**: ein zusätzlicher Hardware-Button an GPIO `1`
+  kann jetzt per `INPUT_PULLUP` für `Play/Pause` genutzt werden; der Taster wird entprellt,
+  nur auf Tastendruck ausgelöst und stößt danach sofort einen LMS-Re-Poll an.
+- **Cover-Prefetch an Track-Metadaten gebunden**: Prefetch-Treffer werden nicht mehr über
+  potentiell vorlaufende `coverid`s dem aktuellen Titel zugeordnet, sondern über einen Key aus
+  Titel, Artist, Album, Tracknummer und Dauer; dadurch sollen Future-Cover nicht mehr mehrere
+  Tracks zu früh auf Display und Web erscheinen.
+- **Aktuelles Cover nicht mehr aus dem Poll-Task veröffentlicht**: der LMS-Poller füllt nur noch
+  Status und Prefetch-Queue der Folgetracks; das Umschalten auf das aktuelle Cover passiert
+  ausschließlich im Player-Update-Pfad, damit ein verfrühter Prefetch-Treffer nicht sofort als
+  laufendes Cover sichtbar wird.
+
 ## [0.3.2] — 2026-04-05
 
 ### Behoben

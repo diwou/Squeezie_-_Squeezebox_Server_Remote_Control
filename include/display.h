@@ -1,5 +1,6 @@
 #pragma once
 #include "LGFX_setup.h"
+#include <vector>
 
 // Globale Display-Instanz (definiert in display.cpp)
 extern LGFX tft;
@@ -25,12 +26,12 @@ void displayShowOTA(int pct);
 // Factory-Reset-Warnung: secsLeft = verbleibende Sekunden (10..1), 0 = wird ausgeführt
 void displayShowFactoryReset(uint8_t secsLeft);
 
-// Cover-Puffer (PSRAM) für /api/cover — nullptr wenn noch kein Cover geladen
-const uint8_t* displayGetCoverBuf();
-size_t         displayGetCoverLen();
+// Thread-sicheres Cover-Snapshot für /api/cover
+bool           displayCopyCover(std::vector<uint8_t>& out);
+uint32_t       displayGetCoverSerial();
 
 // Cover-Download aus beliebigem Task starten (z.B. lmsPoll auf Core 0)
-void displayPreloadCover(const String& url);
+void displayPreloadCover(const String& url, const String& cacheKey = "");
 
 // Prefetch-Queue befüllen: Cover der nächsten Tracks vorladen (Core 0, sequenziell)
-void displayQueuePrefetch(const String* urls, int count);
+void displayQueuePrefetch(const String* urls, const String* keys, int count);

@@ -9,6 +9,20 @@
 static String   g_host;
 static uint16_t g_port = LYRION_DEFAULT_PORT;
 
+int squeezeVolumeFromLms(int lmsVolume) {
+    if (lmsVolume <= SQUEEZE_VOL_MIN) return 0;
+    return constrain((int)lroundf((lmsVolume - SQUEEZE_VOL_MIN) * 100.0f
+                                  / (100.0f - SQUEEZE_VOL_MIN)), 0, 100);
+}
+
+int squeezeVolumeToLms(int uiVolume) {
+    int clamped = constrain(uiVolume, 0, 100);
+    if (clamped <= 0) return SQUEEZE_VOL_MIN;
+    return constrain((int)lroundf(SQUEEZE_VOL_MIN
+                                  + clamped * (100.0f - SQUEEZE_VOL_MIN) / 100.0f),
+                     SQUEEZE_VOL_MIN, 100);
+}
+
 void squeezeSetServer(const String& host, uint16_t port) {
     g_host = host;
     g_port = port;
@@ -35,6 +49,21 @@ static bool jsonRpc(const String& playerMac, const String& cmdJson, JsonDocument
     String payload = http.getString();
     http.end();
     return !deserializeJson(resp, payload);
+}
+
+static String makeTrackCoverKey(JsonObjectConst track) {
+    String key;
+    key.reserve(160);
+    key += track["title"].as<String>();
+    key += '\x1F';
+    key += track["artist"].as<String>();
+    key += '\x1F';
+    key += track["album"].as<String>();
+    key += '\x1F';
+    key += String(track["tracknum"].as<int>());
+    key += '\x1F';
+    key += String((int)track["duration"].as<float>());
+    return key;
 }
 
 // ─── Player-Liste ────────────────────────────────────────────────────────────
@@ -66,7 +95,7 @@ bool squeezeGetStatus(const String& playerMac, SqueezieStatus& out) {
     if (r.isNull()) return false;
     String mode     = r["mode"].as<String>();
     out.playing     = (mode == "play");
-    out.volume      = r["mixer volume"].as<int>();
+    out.volume      = constrain(r["mixer volume"].as<int>(), 0, 100);
     out.repeatMode  = r["playlist repeat"].as<int>();
     out.shuffleMode = r["playlist shuffle"].as<int>();
     out.position    = (int)r["time"].as<float>();
@@ -80,23 +109,22 @@ bool squeezeGetStatus(const String& playerMac, SqueezieStatus& out) {
         out.album     = t["album"].as<String>();
         out.trackNum  = t["tracknum"].as<int>();
         out.duration  = (int)t["duration"].as<float>();
-        // Cover des aktuellen Titels: coverid-basiert (song-spezifisch, passt zu Prefetch-Slots)
-        // Fallback auf "current"-URL für Streams ohne coverid
-        String cid0 = t["coverid"].as<String>();
-        if (!cid0.isEmpty() && cid0 != "0") {
-            out.coverUrl = "http://" + g_host + ":" + String(g_port)
-                           + "/music/" + cid0 + "/cover_128x128_f.jpg";
-        } else {
-            out.coverUrl = "http://" + g_host + ":" + String(g_port)
-                           + "/music/current/cover_128x128_o.jpg?player=" + playerMac;
-        }
+        // Aktuelles Cover immer über den LMS-"current"-Endpoint holen.
+        // So bleibt das Bild an den tatsächlich laufenden Track gebunden, auch wenn
+        // playlist_loop/coverid beim Übergang kurz asynchron zu den Track-Metadaten ist.
+        out.coverUrl = "http://" + g_host + ":" + String(g_port)
+                       + "/music/current/cover_128x128_o.jpg?player=" + playerMac;
+        out.coverKey = makeTrackCoverKey(t);
         // Cover-URLs der Folgetracks (coverid-basiert, da "current" nur den aktuellen liefert)
         for (size_t i = 1; i < loop.size() && out.nextCount < SQUEEZE_PREFETCH; i++) {
-            String cid = loop[i]["coverid"].as<String>();
+            JsonObject nextTrack = loop[i].as<JsonObject>();
+            String cid = nextTrack["coverid"].as<String>();
             if (!cid.isEmpty() && cid != "0") {
-                out.nextCoverUrls[out.nextCount++] =
+                out.nextCoverUrls[out.nextCount] =
                     "http://" + g_host + ":" + String(g_port)
                     + "/music/" + cid + "/cover_128x128_f.jpg";
+                out.nextCoverKeys[out.nextCount] = makeTrackCoverKey(nextTrack);
+                out.nextCount++;
             }
         }
     }
@@ -109,7 +137,7 @@ bool squeezeGetStatus(const String& playerMac, SqueezieStatus& out) {
 // ─── Steuerkommandos ─────────────────────────────────────────────────────────
 
 bool squeezePlay(const String& mac)  { JsonDocument d; return jsonRpc(mac, "[\"play\"]", d); }
-bool squeezePause(const String& mac) { JsonDocument d; return jsonRpc(mac, "[\"pause\"]", d); }
+bool squeezePause(const String& mac) { JsonDocument d; return jsonRpc(mac, "[\"pause\",1]", d); }
 bool squeezeNext(const String& mac)  { JsonDocument d; return jsonRpc(mac, "[\"playlist\",\"index\",\"+1\"]", d); }
 bool squeezePrev(const String& mac)  { JsonDocument d; return jsonRpc(mac, "[\"playlist\",\"index\",\"-1\"]", d); }
 
@@ -120,7 +148,7 @@ bool squeezeSeek(const String& mac, int seconds) {
 
 bool squeezeSetVolume(const String& mac, int vol) {
     JsonDocument d;
-    return jsonRpc(mac, "[\"mixer\",\"volume\",\"" + String(constrain(vol, 0, 100)) + "\"]", d);
+    return jsonRpc(mac, "[\"mixer\",\"volume\",\"" + String(squeezeVolumeToLms(vol)) + "\"]", d);
 }
 
 bool squeezeAdjustVolume(const String& mac, int delta) {
