@@ -4,8 +4,6 @@ Alle wichtigen Änderungen an diesem Projekt werden hier dokumentiert.
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/)
 und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang/de/).
 
-## [Unreleased]
-
 ## [0.4.0] — 2026-04-07
 
 ### Behoben
