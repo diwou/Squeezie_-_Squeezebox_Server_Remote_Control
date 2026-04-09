@@ -4,6 +4,18 @@ Alle wichtigen Änderungen an diesem Projekt werden hier dokumentiert.
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/)
 und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang/de/).
 
+## [0.4.1] — 2026-04-09
+
+### Hinzugefügt
+- **Playlist-Auswahl auf dem Display**: im Einstellungs-Screen gibt es jetzt den Button „LISTE"
+  im Header; er öffnet einen eigenen Sub-Screen mit allen Server-Playlists. Antippen einer
+  Playlist lädt sie sofort und kehrt zum Player-Screen zurück.
+- **Playlist-Auswahl im Webinterface**: unter Einstellungen → Server neuer Block
+  „Playlist-Auswahl" mit Ladeliste und Auswahlmarkierung; Antippen speichert und lädt die
+  Playlist sofort.
+- Playlist-ID und -Name werden in NVS gespeichert und beim Start wiederhergestellt.
+- Neue API-Endpunkte: `GET /api/playlists` (Serverliste) und `POST /api/config/playlist`.
+
 ## [0.4.0] — 2026-04-07
 
 ### Behoben

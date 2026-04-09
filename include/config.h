@@ -5,7 +5,7 @@
 // =============================================================================
 
 // --- Anwendung ---
-#define APP_VERSION "0.4.0"
+#define APP_VERSION "0.4.1"
 
 // --- Pins ---
 #define PIN_TFT_BL      7   // Hintergrundbeleuchtung (HIGH = an)
@@ -49,6 +49,8 @@
 #define NVS_KEY_SRV_PORT    "srvPort"
 #define NVS_KEY_PLAYER_MAC  "playerMAC"
 #define NVS_KEY_SCROLL_SPD  "scrollSpd"
+#define NVS_KEY_PL_ID       "plId"
+#define NVS_KEY_PL_NAME     "plName"
 
 // --- WiFi AP ---
 #define WIFI_AP_SSID             "Squeezie-Setup"

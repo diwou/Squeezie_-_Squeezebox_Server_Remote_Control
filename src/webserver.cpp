@@ -58,6 +58,8 @@ struct SrvCfg { String host, playerMac; uint16_t port = LYRION_DEFAULT_PORT; int
 
 static NetCfg g_net;
 static SrvCfg g_srv;
+static String g_playlistId;
+static String g_playlistName;
 
 // ─── NVS ─────────────────────────────────────────────────────────────────────
 
@@ -75,6 +77,8 @@ static void loadCfg() {
     g_srv.port        = p.getUShort(NVS_KEY_SRV_PORT,   LYRION_DEFAULT_PORT);
     g_srv.playerMac   = p.getString(NVS_KEY_PLAYER_MAC, "");
     g_srv.scrollSpeed = p.getInt   (NVS_KEY_SCROLL_SPD, 30);
+    g_playlistId      = p.getString(NVS_KEY_PL_ID,      "");
+    g_playlistName    = p.getString(NVS_KEY_PL_NAME,    "");
     p.end();
 }
 static void saveNetCfg() {
@@ -89,6 +93,12 @@ static void saveSrvCfg() {
     Preferences p; p.begin(NVS_NAMESPACE, false);
     p.putString(NVS_KEY_SRV_HOST,   g_srv.host);  p.putUShort(NVS_KEY_SRV_PORT,   g_srv.port);
     p.putString(NVS_KEY_PLAYER_MAC, g_srv.playerMac); p.putInt(NVS_KEY_SCROLL_SPD, g_srv.scrollSpeed);
+    p.end();
+}
+static void savePlaylistCfg() {
+    Preferences p; p.begin(NVS_NAMESPACE, false);
+    p.putString(NVS_KEY_PL_ID,   g_playlistId);
+    p.putString(NVS_KEY_PL_NAME, g_playlistName);
     p.end();
 }
 
@@ -495,6 +505,14 @@ body{max-width:560px;margin:0 auto;display:flex;flex-direction:column;min-height
 #pl-list li.sel{background:#0a2e16;border-color:#00c853}
 .pl-name{color:#e0e0e0;font-size:1em}
 .pl-mac{color:#606060;font-size:1em}
+#pls-list{list-style:none;margin:10px 0 0}
+#pls-list li{padding:14px 16px;background:#1e1e1e;border:2px solid #333;
+  border-radius:8px;margin-bottom:8px;cursor:pointer;
+  display:flex;justify-content:space-between;align-items:center}
+#pls-list li:active{opacity:.7}
+#pls-list li.sel{background:#0a2e16;border-color:#00c853}
+.pls-name{color:#e0e0e0;font-size:1em}
+.pls-cnt{color:#606060;font-size:.9em}
 #load-err{color:#e94560;font-size:1em;padding:12px 0;display:none}
 </style></head><body>
 <div id=page-hdr>Einstellungen</div>
@@ -554,6 +572,12 @@ body{max-width:560px;margin:0 auto;display:flex;flex-direction:column;min-height
     <button class=btn onclick=ldPl()>Player laden</button>
     <ul id=pl-list></ul>
   </div>
+  <div class=card>
+    <h3>Playlist-Auswahl</h3>
+    <div id=cur-pl class=msg>Keine Playlist ausgew&auml;hlt</div>
+    <button class=btn onclick=ldPls() style="margin-top:10px">Playlists laden</button>
+    <ul id=pls-list></ul>
+  </div>
 </div>
 
 <!-- Tab: System -->
@@ -590,7 +614,7 @@ body{max-width:560px;margin:0 auto;display:flex;flex-direction:column;min-height
   </a>
 </nav>
 <script>
-var mac='';
+var mac='',curPlId='';
 function tab(id,btn){
   document.querySelectorAll('.tc').forEach(function(e){e.className='tc';});
   document.querySelectorAll('.itab').forEach(function(e){e.className='itab';});
@@ -663,6 +687,28 @@ function ldPl(){
     document.getElementById('pl-list').innerHTML='<li style="color:#e94560;border:none;background:none">Fehler beim Laden der Player</li>';
   });
 }
+function ldPls(){
+  fetch('/api/playlists').then(function(r){return r.json();}).then(function(arr){
+    var ul=document.getElementById('pls-list');ul.innerHTML='';
+    if(!arr||!arr.length){
+      ul.innerHTML='<li style="color:#808080;border:none;background:none">Keine Playlists \u2014 Server konfiguriert?</li>';return;}
+    arr.forEach(function(p){
+      var li=document.createElement('li');
+      if(p.id===curPlId)li.className='sel';
+      li.innerHTML='<span class=pls-name>'+p.name+'</span>'+(p.trackCount>0?'<span class=pls-cnt>'+p.trackCount+' Titel</span>':'');
+      li.onclick=function(){
+        curPlId=p.id;
+        ul.querySelectorAll('li').forEach(function(l){l.className='';});
+        li.className='sel';
+        document.getElementById('cur-pl').textContent=p.name;
+        fetch('/api/config/playlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:p.id,name:p.name})});
+      };
+      ul.appendChild(li);
+    });
+  }).catch(function(){
+    document.getElementById('pls-list').innerHTML='<li style="color:#e94560;border:none;background:none">Fehler beim Laden</li>';
+  });
+}
 fetch('/api/config').then(function(r){return r.json();}).then(function(d){
   document.getElementById('ss').value=d.ssid||'';
   document.getElementById('dh').checked=d.dhcp!==false;
@@ -672,6 +718,8 @@ fetch('/api/config').then(function(r){return r.json();}).then(function(d){
   document.getElementById('sh').value=d.srvHost||'';document.getElementById('sp').value=d.srvPort||9000;
   document.getElementById('sc').value=d.scrollSpeed||30;
   mac=d.playerMac||'';
+  curPlId=d.playlistId||'';
+  if(d.playlistName)document.getElementById('cur-pl').textContent=d.playlistName;
   document.getElementById('dh').dispatchEvent(new Event('change'));
   var ip=d.deviceIp||d.ip||'\u2014';
   document.getElementById('dev-info').innerHTML=
@@ -871,6 +919,21 @@ static void setupRoutes() {
         req->send(200, "application/json", out);
     });
 
+    server.on("/api/playlists", HTTP_GET, [](AsyncWebServerRequest* req) {
+        std::vector<SqueeziePlaylist> lists;
+        if (!squeezeGetPlaylists(lists)) { req->send(200, "application/json", "[]"); return; }
+        JsonDocument doc;
+        JsonArray arr = doc.to<JsonArray>();
+        for (auto& pl : lists) {
+            JsonObject o = arr.add<JsonObject>();
+            o["id"]         = pl.id;
+            o["name"]       = pl.name;
+            o["trackCount"] = pl.trackCount;
+        }
+        String out; serializeJson(doc, out);
+        req->send(200, "application/json", out);
+    });
+
     server.on("/api/scan", HTTP_POST, [](AsyncWebServerRequest* req) {
         String foundHost;
         uint16_t foundPort = LYRION_DEFAULT_PORT;
@@ -890,6 +953,7 @@ static void setupRoutes() {
         doc["ntp"]         = g_net.ntp;
         doc["srvHost"]     = g_srv.host;  doc["srvPort"]      = g_srv.port;
         doc["playerMac"]   = g_srv.playerMac; doc["scrollSpeed"] = g_srv.scrollSpeed;
+        doc["playlistId"]  = g_playlistId;   doc["playlistName"] = g_playlistName;
         doc["deviceIp"]    = wifiGetIP();
         String out; serializeJson(doc, out);
         req->send(200, "application/json", out);
@@ -948,6 +1012,21 @@ static void setupRoutes() {
             if (!deserializeJson(doc, (char*)data, len)) {
                 g_srv.playerMac = doc["mac"] | "";
                 saveSrvCfg();
+            }
+            req->send(200, "application/json", "{\"ok\":true}");
+        }
+    );
+
+    server.on("/api/config/playlist", HTTP_POST,
+        [](AsyncWebServerRequest* req) {},
+        nullptr,
+        [](AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index, size_t total) {
+            if (index + len < total) return;
+            JsonDocument doc;
+            if (!deserializeJson(doc, (char*)data, len)) {
+                String id   = doc["id"]   | "";
+                String name = doc["name"] | "";
+                if (!id.isEmpty()) wifiSetPlaylist(id, name, true);
             }
             req->send(200, "application/json", "{\"ok\":true}");
         }
@@ -1144,6 +1223,17 @@ void wifiSetPlayer(const String& mac) {
     saveSrvCfg();
     g_forceRepoll = true;
     srvLog("[Settings] Player MAC: %s", mac.c_str());
+}
+String wifiGetPlaylistId()   { return g_playlistId; }
+String wifiGetPlaylistName() { return g_playlistName; }
+bool wifiSetPlaylist(const String& id, const String& name, bool loadNow) {
+    g_playlistId   = id;
+    g_playlistName = name;
+    savePlaylistCfg();
+    if (loadNow && !g_srv.playerMac.isEmpty())
+        squeezeLoadPlaylist(g_srv.playerMac, id, name);
+    srvLog("[Settings] Playlist: %s (%s)", name.c_str(), id.c_str());
+    return true;
 }
 
 void wifiForceRepoll() {

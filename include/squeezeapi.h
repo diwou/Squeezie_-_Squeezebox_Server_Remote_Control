@@ -11,6 +11,12 @@ struct SqueeziePlayer {
     bool   connected;
 };
 
+struct SqueeziePlaylist {
+    String id;
+    String name;
+    int    trackCount = 0;
+};
+
 struct SqueezieStatus {
     bool   playing     = false;
     String title;
@@ -22,6 +28,7 @@ struct SqueezieStatus {
     int    duration    = 0;
     int    position    = 0;
     int    volume      = 0;
+    bool   muted       = false;
     int    repeatMode  = 0;   // 0=aus, 1=Titel, 2=Playlist
     int    shuffleMode = 0;   // 0=aus, 1=Titel, 2=Album
     String playerName;
@@ -35,6 +42,7 @@ String   squeezeGetHost();
 uint16_t squeezeGetPort();
 
 bool squeezeGetPlayers(std::vector<SqueeziePlayer>& out);
+bool squeezeGetPlaylists(std::vector<SqueeziePlaylist>& out);
 bool squeezeGetStatus(const String& playerMac, SqueezieStatus& out);
 
 bool squeezePlay(const String& playerMac);
@@ -46,6 +54,10 @@ bool squeezeSetVolume(const String& playerMac, int volume);       // absolut 0â€
 bool squeezeAdjustVolume(const String& playerMac, int delta);     // relativ (+1, -5, â€¦)
 bool squeezeSetRepeat(const String& playerMac, int mode);
 bool squeezeSetShuffle(const String& playerMac, int mode);
+bool squeezeLoadPlaylist(const String& playerMac, const String& playlistId,
+                         const String& playlistName = "");
+bool squeezeToggleMute(const String& playerMac);
+bool squeezeSetMute(const String& playerMac, bool mute);
 
 int  squeezeVolumeFromLms(int lmsVolume); // LMS [6..100] -> UI [0..100]
 int  squeezeVolumeToLms(int uiVolume);    // UI [0..100] -> LMS [6..100]

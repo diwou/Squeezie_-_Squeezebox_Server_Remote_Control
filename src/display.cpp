@@ -26,7 +26,7 @@ int32_t g_touch_raw_x = 0;
 int32_t g_touch_raw_y = 0;
 
 // ─── Screen-State ────────────────────────────────────────────────────────────
-enum Screen { SCREEN_NONE, SCREEN_STARTUP, SCREEN_PLAYER, SCREEN_SETTINGS };
+enum Screen { SCREEN_NONE, SCREEN_STARTUP, SCREEN_PLAYER, SCREEN_SETTINGS, SCREEN_PLAYLIST };
 static Screen g_screen = SCREEN_NONE;
 
 // ─── Player-Bildschirm Layout-Konstanten ─────────────────────────────────────
@@ -51,15 +51,17 @@ static Screen g_screen = SCREEN_NONE;
 #define PL_MODE_H     30
 
 // Settings-Screen Layout
-#define SET_BOX_X    4
-#define SET_BOX_W    336
-#define SET_BTN_X    344
-#define SET_BTN_W    132
-#define SET_SRV_Y    50
-#define SET_DISC_Y   90
-#define SET_PLR_Y0   154
-#define SET_PLR_H    38
-#define SET_PLR_GAP  3
+#define SET_BOX_X      4
+#define SET_BOX_W      336
+#define SET_BTN_X      344
+#define SET_BTN_W      132
+#define SET_SRV_Y      50
+#define SET_DISC_Y     90
+#define SET_PLR_Y0     154
+#define SET_PLR_H      38
+#define SET_PLR_GAP    3
+#define SET_LISTE_X    340   // "LISTE"-Button im Settings-Header
+#define SET_LISTE_W    74
 
 // Farben (RGB888, 24-Bit für LovyanGFX uint32_t-Interface)
 // WICHTIG: (uint32_t)-Cast erforderlich — LovyanGFX behandelt int-Literale anders als uint32_t
@@ -90,7 +92,8 @@ static int     g_lastVolFilled  = -1; // für Lautstärkebalken selektives Neuze
 static int     g_lastClockMin   = -2; // für Uhrzeit im Header (-2 = noch nie gezeichnet)
 
 // Settings screen state
-static std::vector<SqueeziePlayer> g_settPlayers;
+static std::vector<SqueeziePlayer>   g_settPlayers;
+static std::vector<SqueeziePlaylist> g_settPlaylists;
 static String   g_settDiscHost;
 static uint16_t g_settDiscPort  = 0;
 static bool     g_settDiscFound = false;
@@ -1042,6 +1045,81 @@ void displayPreloadCover(const String& url, const String& cacheKey) {
 
 // ─── Einstellungs-Screen ─────────────────────────────────────────────────────
 
+// ─── Playlist-Screen ─────────────────────────────────────────────────────────
+
+static void drawSettingsScreen(); // Vorwärtsdeklaration für Rücknavigation
+
+static void drawPlaylistList() {
+    int listY0 = PL_HDR_H + 4;
+    tft.fillRect(0, listY0, DISPLAY_WIDTH, DISPLAY_HEIGHT - listY0, COL_BG);
+    String curId = wifiGetPlaylistId();
+    int n = (int)g_settPlaylists.size();
+    if (n == 0) {
+        tft.setFont(nullptr); tft.setTextSize(2);
+        tft.setTextDatum(ML_DATUM);
+        tft.setTextColor(COL_MGREY, COL_BG);
+        tft.drawString(squeezeGetHost().isEmpty()
+            ? "Kein Server konfiguriert"
+            : "Keine Playlists gefunden",
+            12, listY0 + 16);
+        return;
+    }
+    int maxVisible = (DISPLAY_HEIGHT - listY0) / (SET_PLR_H + SET_PLR_GAP);
+    int count = min(n, maxVisible);
+    for (int i = 0; i < count; i++) {
+        int y = listY0 + i * (SET_PLR_H + SET_PLR_GAP);
+        bool active = (g_settPlaylists[i].id == curId);
+        uint32_t bg     = active ? (uint32_t)COL_ACTIVE : (uint32_t)COL_DARK;
+        uint32_t border = active ? (uint32_t)COL_GREEN  : (uint32_t)COL_MID;
+        tft.fillRoundRect(4, y, DISPLAY_WIDTH - 8, SET_PLR_H, 5, bg);
+        tft.drawRoundRect(4, y, DISPLAY_WIDTH - 8, SET_PLR_H, 5, border);
+        tft.setFont(nullptr); tft.setTextSize(2);
+        tft.setTextDatum(ML_DATUM);
+        tft.setTextColor(COL_WHITE, bg);
+        tft.setClipRect(12, y, DISPLAY_WIDTH - 24, SET_PLR_H);
+        tft.drawString(utf8ToAscii(g_settPlaylists[i].name).c_str(), 12, y + SET_PLR_H / 2);
+        tft.clearClipRect();
+    }
+}
+
+static void drawPlaylistScreen() {
+    g_screen = SCREEN_PLAYLIST;
+    tft.fillScreen(COL_BG);
+    tft.fillRect(0, 0, DISPLAY_WIDTH, PL_HDR_H, COL_HDR);
+    tft.setFont(nullptr); tft.setTextSize(2);
+    tft.setTextDatum(ML_DATUM);
+    tft.setTextColor(COL_WHITE, COL_HDR);
+    tft.drawString("PLAYLIST", 8, PL_HDR_H / 2);
+    tft.fillRoundRect(DISPLAY_WIDTH - 62, 3, 58, PL_HDR_H - 6, 4, COL_DARK);
+    tft.drawRoundRect(DISPLAY_WIDTH - 62, 3, 58, PL_HDR_H - 6, 4, COL_MID);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(COL_WHITE, COL_DARK);
+    tft.drawString("ZUR.", DISPLAY_WIDTH - 33, PL_HDR_H / 2);
+    // "Lade..."-Hinweis während Netzwerkzugriff
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(COL_YELLOW, COL_BG);
+    tft.drawString("Lade...", DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 2);
+    g_settPlaylists.clear();
+    if (!squeezeGetHost().isEmpty()) squeezeGetPlaylists(g_settPlaylists);
+    drawPlaylistList();
+}
+
+static void handlePlaylistTouch(int32_t tx, int32_t ty) {
+    if (ty < PL_HDR_H && tx > DISPLAY_WIDTH - 62) {
+        drawSettingsScreen();
+        return;
+    }
+    int listY0 = PL_HDR_H + 4;
+    if (ty >= listY0 && !g_settPlaylists.empty()) {
+        int stride = SET_PLR_H + SET_PLR_GAP;
+        int idx = (ty - listY0) / stride;
+        if ((ty - listY0) % stride < SET_PLR_H && idx < (int)g_settPlaylists.size()) {
+            wifiSetPlaylist(g_settPlaylists[idx].id, g_settPlaylists[idx].name, true);
+            displayDrawPlayerScreen();
+        }
+    }
+}
+
 static void drawSettingsSrvRow() {
     String srvTxt = squeezeGetHost().isEmpty()
         ? "Kein Server"
@@ -1134,9 +1212,12 @@ static void drawSettingsScreen() {
     tft.drawString("EINSTELLUNGEN", 8, PL_HDR_H / 2);
     tft.fillRoundRect(DISPLAY_WIDTH - 62, 3, 58, PL_HDR_H - 6, 4, COL_DARK);
     tft.drawRoundRect(DISPLAY_WIDTH - 62, 3, 58, PL_HDR_H - 6, 4, COL_MID);
+    tft.fillRoundRect(SET_LISTE_X, 3, SET_LISTE_W, PL_HDR_H - 6, 4, COL_DARK);
+    tft.drawRoundRect(SET_LISTE_X, 3, SET_LISTE_W, PL_HDR_H - 6, 4, COL_MID);
     tft.setTextDatum(MC_DATUM);
     tft.setTextColor(COL_WHITE, COL_DARK);
     tft.drawString("ZUR.", DISPLAY_WIDTH - 33, PL_HDR_H / 2);
+    tft.drawString("LISTE", SET_LISTE_X + SET_LISTE_W / 2, PL_HDR_H / 2);
     // Abschnitt: Server
     tft.setFont(nullptr); tft.setTextSize(1);
     tft.setTextDatum(ML_DATUM);
@@ -1158,6 +1239,11 @@ static void drawSettingsScreen() {
 }
 
 static void handleSettingsTouch(int32_t tx, int32_t ty) {
+    // LISTE-Button → Playlist-Screen
+    if (ty < PL_HDR_H && tx >= SET_LISTE_X && tx < SET_LISTE_X + SET_LISTE_W) {
+        drawPlaylistScreen();
+        return;
+    }
     // ZURÜCK-Button
     if (ty < PL_HDR_H && tx > DISPLAY_WIDTH - 62) {
         displayDrawPlayerScreen();
@@ -1560,6 +1646,11 @@ void displayHandleTouch() {
 
     if (g_screen == SCREEN_SETTINGS) {
         if (pressed && !lastPressed) handleSettingsTouch(tx, ty);
+        lastPressed = pressed;
+        return;
+    }
+    if (g_screen == SCREEN_PLAYLIST) {
+        if (pressed && !lastPressed) handlePlaylistTouch(tx, ty);
         lastPressed = pressed;
         return;
     }

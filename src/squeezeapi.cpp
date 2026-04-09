@@ -182,6 +182,43 @@ String squeezeCoverUrl(const String& coverId, int size) {
     return coverUrlForId(coverId, size);
 }
 
+// ─── Mute ────────────────────────────────────────────────────────────────────
+
+bool squeezeToggleMute(const String& mac) {
+    JsonDocument d;
+    return jsonRpc(mac, "[\"mixer\",\"muting\"]", d);
+}
+
+bool squeezeSetMute(const String& mac, bool mute) {
+    JsonDocument d;
+    return jsonRpc(mac, "[\"mixer\",\"muting\"," + String(mute ? "1" : "0") + "]", d);
+}
+
+// ─── Playlists ───────────────────────────────────────────────────────────────
+
+bool squeezeGetPlaylists(std::vector<SqueeziePlaylist>& out) {
+    JsonDocument resp;
+    if (!jsonRpc("", "[\"playlists\",0,200,\"tags:u\"]", resp)) return false;
+    JsonArray arr = resp["result"]["playlists_loop"].as<JsonArray>();
+    if (arr.isNull()) return false;
+    out.clear();
+    for (JsonObject p : arr) {
+        SqueeziePlaylist pl;
+        pl.id         = p["id"].as<String>();
+        pl.name       = p["playlist"].as<String>();
+        pl.trackCount = p["count"].as<int>();
+        out.push_back(pl);
+    }
+    return true;
+}
+
+bool squeezeLoadPlaylist(const String& mac, const String& playlistId,
+                         const String& playlistName) {
+    (void)playlistName;
+    JsonDocument d;
+    return jsonRpc(mac, "[\"playlistcontrol\",\"cmd:load\",\"playlist_id:" + playlistId + "\"]", d);
+}
+
 // ─── Server-Discovery ────────────────────────────────────────────────────────
 // 1. UDP-Broadcast an Port 3483 (Slim-Protokoll) — schnell wenn Server antwortet
 // 2. TCP-Portscan der Prioritäts-IPs im lokalen Subnetz — zuverlässiger Fallback
