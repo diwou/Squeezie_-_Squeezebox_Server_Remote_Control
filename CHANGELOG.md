@@ -20,6 +20,10 @@ Release-IDs werden nur bei echten Releases dokumentiert.
 - **CSpell-Konfiguration aktualisiert**: das deutsche CSpell-Wörterbuch ist jetzt projektlokal
   eingebunden und per `npm run spell` reproduzierbar ausführbar; projekt- und LMS-spezifische
   Fachbegriffe wurden ergänzt. [`263af2c`]
+- **Firmware-Export nach HUB75-Muster ergänzt**: PlatformIO exportiert nach erfolgreichen Builds
+  automatisch `firmware.bin`, Bootloader, Partitionsdatei, `boot_app0.bin` und Manifest nach
+  `Firmware/<Version>/` sowie `Firmware/latest/`, wobei die Version aus `APP_VERSION` gelesen
+  wird. [`pending`]
 
 ## [0.4.1] — 2026-04-09
 

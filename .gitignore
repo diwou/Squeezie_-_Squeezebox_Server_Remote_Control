@@ -3,6 +3,7 @@
 .pioenvs/
 .piolibdeps/
 .pioinit
+Firmware/
 
 # Node/CSpell Dependencies
 node_modules/
