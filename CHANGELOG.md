@@ -23,7 +23,7 @@ Release-IDs werden nur bei echten Releases dokumentiert.
 - **Firmware-Export nach HUB75-Muster ergänzt**: PlatformIO exportiert nach erfolgreichen Builds
   automatisch `firmware.bin`, Bootloader, Partitionsdatei, `boot_app0.bin` und Manifest nach
   `Firmware/<Version>/` sowie `Firmware/latest/`, wobei die Version aus `APP_VERSION` gelesen
-  wird. [`pending`]
+  wird. [`ce9de8f`]
 
 ## [0.4.1] — 2026-04-09
 
