@@ -49,6 +49,12 @@ static Screen g_screen = SCREEN_NONE;
 #define PL_VOL_H      26
 #define PL_MODE_Y     290
 #define PL_MODE_H     30
+#define PL_VOL_BTN_W  40
+#define PL_VOL_MINUS_X 4
+#define PL_VOL_BAR_X  48
+#define PL_VOL_PLUS_X 392
+#define PL_VOL_MUTE_X 436
+#define PL_VOL_BAR_W  (PL_VOL_PLUS_X - PL_VOL_BAR_X - 4)
 
 // Settings-Screen Layout
 #define SET_BOX_X      4
@@ -81,7 +87,7 @@ static Screen g_screen = SCREEN_NONE;
 // Player-Screen Zustand (selektives Neuzeichnen)
 static String  g_dTitle, g_dArtist, g_dAlbum, g_dCoverUrl, g_dCoverKey, g_dPlayer;
 static String  g_dTitleD, g_dArtistD, g_dAlbumD; // displaybereit (UTF-8-faehig)
-static bool    g_dPlaying  = false;
+static bool    g_dPlaying  = false, g_dMuted = false;
 static int     g_dVolume   = -1, g_dRepeat  = -1, g_dShuffle = -1;
 static int     g_dPosition = -1, g_dDuration = 0, g_dTrackNum = -1;
 static int     g_lmsPos   = -1;   // zuletzt von LMS empfangene Position
@@ -89,6 +95,7 @@ static int     g_localPos  = 0;   // Interpolationsbasis
 static uint32_t g_localPosMs = 0; // millis() beim letzten LMS-Sync
 static int     g_lastProgFilled = -1; // für Fortschrittsbalken selektives Neuzeichnen
 static int     g_lastVolFilled  = -1; // für Lautstärkebalken selektives Neuzeichnen
+static bool    g_lastVolMuted   = false;
 static int     g_lastClockMin   = -2; // für Uhrzeit im Header (-2 = noch nie gezeichnet)
 
 // Settings screen state
@@ -554,9 +561,10 @@ static void drawCircleBtn(int16_t cx, int16_t cy, int16_t r,
 }
 
 static void drawVolumeIcon(int16_t x, int16_t y, int16_t w, int16_t h,
-                           uint32_t bg, uint32_t fg, bool louder) {
+                           uint32_t bg, uint32_t fg, bool louder,
+                           uint32_t border = COL_WHITE) {
     tft.fillRoundRect(x, y, w, h, 6, bg);
-    tft.drawRoundRect(x, y, w, h, 6, COL_WHITE);
+    tft.drawRoundRect(x, y, w, h, 6, border);
     tft.setFont(nullptr);
     tft.setTextDatum(MC_DATUM);
     tft.setTextColor(fg, bg);
@@ -566,6 +574,21 @@ static void drawVolumeIcon(int16_t x, int16_t y, int16_t w, int16_t h,
     } else {
         tft.drawString("-", x + w / 2, y + h / 2 + 1);
     }
+}
+
+static void drawMuteIcon(int16_t x, int16_t y, int16_t w, int16_t h, bool muted) {
+    uint32_t bg = muted ? (uint32_t)0x5A2020 : (uint32_t)0x3A3A3A;
+    uint32_t fg = muted ? (uint32_t)0xFFB0B0 : (uint32_t)COL_WHITE;
+    uint32_t border = muted ? (uint32_t)0xFFB0B0 : (uint32_t)COL_WHITE;
+    tft.fillRoundRect(x, y, w, h, 6, bg);
+    tft.drawRoundRect(x, y, w, h, 6, border);
+
+    int cx = x + w / 2;
+    int cy = y + h / 2;
+    tft.fillRect(cx - 14, cy - 4, 5, 8, fg);
+    tft.fillTriangle(cx - 9, cy - 4, cx - 2, cy - 10, cx - 2, cy + 10, fg);
+    tft.drawLine(cx + 4, cy - 8, cx + 14, cy + 8, fg);
+    tft.drawLine(cx + 14, cy - 8, cx + 4, cy + 8, fg);
 }
 
 static void drawRepeatGlyph(int16_t x, int16_t y, uint32_t fg) {
@@ -774,30 +797,35 @@ static void drawTransportButtons(bool playing) {
     drawCircleBtn(390, cy, 29, (uint32_t)0x3A3A3A, COL_WHITE, "next");
 }
 
-// Einmalig beim Screen-Aufbau: nur Buttons zeichnen
-static void drawVolumeButtons() {
+static void drawVolumeButtons(bool muted) {
     int y = PL_VOL_Y, h = PL_VOL_H;
-    drawVolumeIcon(4, y + 2, 40, h - 4, (uint32_t)0x3A3A3A, COL_WHITE, false);
-    drawVolumeIcon(DISPLAY_WIDTH - 44, y + 2, 40, h - 4, (uint32_t)0x3A3A3A, COL_WHITE, true);
+    uint32_t volBg = muted ? (uint32_t)0x242424 : (uint32_t)0x3A3A3A;
+    uint32_t volFg = muted ? (uint32_t)COL_DGREY : (uint32_t)COL_WHITE;
+    uint32_t volBorder = muted ? (uint32_t)COL_DGREY : (uint32_t)COL_WHITE;
+    drawVolumeIcon(PL_VOL_MINUS_X, y + 2, PL_VOL_BTN_W, h - 4, volBg, volFg, false, volBorder);
+    drawVolumeIcon(PL_VOL_PLUS_X,  y + 2, PL_VOL_BTN_W, h - 4, volBg, volFg, true,  volBorder);
+    drawMuteIcon(PL_VOL_MUTE_X, y + 2, PL_VOL_BTN_W, h - 4, muted);
 }
 
-static void drawVolumeRow(int volume) {
+static void drawVolumeRow(int volume, bool muted) {
     int y = PL_VOL_Y, h = PL_VOL_H;
     int real_pct = constrain(volume, 0, 100);
-    int bx = 48, bw = DISPLAY_WIDTH - 96;
+    int bx = PL_VOL_BAR_X, bw = PL_VOL_BAR_W;
     int filled = constrain(real_pct * bw / 100, 0, bw);
+    uint32_t fillCol = muted ? (uint32_t)COL_MGREY : (uint32_t)COL_GREEN;
 
     // Selektiv: nur geänderte Pixel neu zeichnen → kein Flackern
-    if (g_lastVolFilled < 0) {
+    if (g_lastVolFilled < 0 || muted != g_lastVolMuted) {
         // Erstzeichnung: gesamten Balken zeichnen
-        if (filled > 0)  tft.fillRect(bx,          y + 5, filled,      h - 10, COL_GREEN);
+        if (filled > 0)  tft.fillRect(bx,          y + 5, filled,      h - 10, fillCol);
         if (filled < bw) tft.fillRect(bx + filled,  y + 5, bw - filled, h - 10, COL_PROG_BG);
     } else if (filled > g_lastVolFilled) {
-        tft.fillRect(bx + g_lastVolFilled, y + 5, filled - g_lastVolFilled, h - 10, COL_GREEN);
+        tft.fillRect(bx + g_lastVolFilled, y + 5, filled - g_lastVolFilled, h - 10, fillCol);
     } else if (filled < g_lastVolFilled) {
         tft.fillRect(bx + filled, y + 5, g_lastVolFilled - filled, h - 10, COL_PROG_BG);
     }
     g_lastVolFilled = filled;
+    g_lastVolMuted = muted;
 
     // Prozentzahl: Bar unter dem Text auffrischen, dann transparenter weißer Text
     char buf[6]; snprintf(buf, sizeof(buf), "%d%%", real_pct);
@@ -808,7 +836,7 @@ static void drawVolumeRow(int volume) {
     int rx1 = min(bx + bw, tcx + tw / 2 + tw % 2 + 2);
     int gx1 = bx + filled;                // Grün endet hier
     if (gx1 > rx0)
-        tft.fillRect(rx0, y + 5, min(gx1, rx1) - rx0, h - 10, COL_GREEN);
+        tft.fillRect(rx0, y + 5, min(gx1, rx1) - rx0, h - 10, fillCol);
     if (gx1 < rx1)
         tft.fillRect(max(rx0, gx1), y + 5, rx1 - max(rx0, gx1), h - 10, COL_PROG_BG);
     tft.setTextDatum(MC_DATUM);
@@ -1295,10 +1323,11 @@ void displayDrawPlayerScreen() {
 
     g_dTitle = g_dArtist = g_dAlbum = g_dCoverUrl = g_dPlayer = "";
     g_dCoverKey = "";
-    g_dPlaying = false; g_dVolume = g_dRepeat = g_dShuffle = -1;
+    g_dPlaying = false; g_dMuted = false; g_dVolume = g_dRepeat = g_dShuffle = -1;
     g_dPosition = -1;   g_dDuration = 0; g_dTrackNum = -1;
     g_lastProgFilled = -1;
     g_lastVolFilled  = -1;
+    g_lastVolMuted   = false;
     g_scrollOff[0] = g_scrollOff[1] = g_scrollOff[2] = 0;
     g_scrollLast = 0;
     g_coverDrawnForTitle = "";
@@ -1317,8 +1346,8 @@ void displayDrawPlayerScreen() {
     tft.fillRect(PL_INFO_X, PL_INFO_Y, PL_INFO_W, PL_COVER_H, COL_BG);
     drawProgressBar(0, 0);
     drawTransportButtons(false);
-    drawVolumeButtons();
-    drawVolumeRow(0);
+    drawVolumeButtons(false);
+    drawVolumeRow(0, false);
     drawModeRow(0, 0);
 }
 
@@ -1548,8 +1577,12 @@ void displayUpdatePlayer() {
         drawProgressBar(dispPos, s.duration);
         g_dPosition = dispPos;
     }
-    if (s.volume != g_dVolume) {
-        drawVolumeRow(s.volume);
+    if (s.muted != g_dMuted) {
+        drawVolumeButtons(s.muted);
+        g_dMuted = s.muted;
+    }
+    if (s.volume != g_dVolume || s.muted != g_lastVolMuted) {
+        drawVolumeRow(s.volume, s.muted);
         g_dVolume = s.volume;
     }
     if (s.repeatMode != g_dRepeat || s.shuffleMode != g_dShuffle) {
@@ -1719,11 +1752,17 @@ void displayHandleTouch() {
 
     // ── Lautstärke ────────────────────────────────────────────────────────────
     if (pressed && ty >= PL_VOL_Y && ty < PL_MODE_Y) {
-        const int bx = 48, bw = DISPLAY_WIDTH - 96;
-        bool inVolMinus = (tx >= 4   && tx <= 44);
-        bool inVolPlus  = (tx >= DISPLAY_WIDTH - 44 && tx <= DISPLAY_WIDTH - 4);
+        const int bx = PL_VOL_BAR_X, bw = PL_VOL_BAR_W;
+        bool inVolMinus = (tx >= PL_VOL_MINUS_X && tx <= PL_VOL_MINUS_X + PL_VOL_BTN_W);
+        bool inVolPlus  = (tx >= PL_VOL_PLUS_X  && tx <= PL_VOL_PLUS_X  + PL_VOL_BTN_W);
+        bool inMute     = (tx >= PL_VOL_MUTE_X  && tx <= PL_VOL_MUTE_X  + PL_VOL_BTN_W);
         bool inBar      = (tx >= bx  && tx <= bx + bw);
-        if (inBar) {
+        if (inMute) {
+            if (!lastPressed && squeezeToggleMute(wifiGetPlayerMac())) wifiForceRepoll();
+            volHeld = false;
+        } else if (g_dMuted) {
+            volHeld = false;
+        } else if (inBar) {
             // Direkt nach Touch-Position setzen (stufenlos)
             int pct = constrain((tx - bx) * 100 / bw, 0, 100);
             if (!volHeld || millis() - volHoldT0 > 80) {

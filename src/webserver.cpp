@@ -300,7 +300,10 @@ body{display:flex;flex-direction:column;min-height:100vh;max-width:560px;margin:
 #ctrl-transport{display:flex;justify-content:center;align-items:center;gap:20px;margin-bottom:20px}
 #ctrl-volume{display:flex;align-items:center;gap:12px;margin-bottom:18px;padding:0 4px}
 #vol-slider{flex:1;accent-color:#00c853;cursor:pointer;height:6px;outline:none}
+#vol-slider:disabled{accent-color:#777;cursor:not-allowed;opacity:.55}
 #vv{min-width:56px;text-align:right;font-size:1em;color:#d0d0d0;font-weight:600}
+#ctrl-volume.vol-muted #vv{color:#888}
+#ctrl-volume.vol-muted .cb:not(.mute){border-color:#666;color:#777;filter:grayscale(1);cursor:not-allowed;box-shadow:none}
 #ctrl-modes{display:flex;gap:12px;margin-bottom:8px}
 .cb{background:linear-gradient(180deg,#4a4a4a 0%,#2a2a2a 100%);border:2px solid #c8c8c8;color:#fff;border-radius:50%;
   width:64px;height:64px;display:flex;align-items:center;justify-content:center;
@@ -356,16 +359,16 @@ body{display:flex;flex-direction:column;min-height:100vh;max-width:560px;margin:
     </button>
   </div>
   <div id=ctrl-volume>
-    <button class="cb sm" onclick="c('vd')" title="Leiser">
+    <button class="cb sm" id=bvd onclick="c('vd')" title="Leiser">
       <svg viewBox="0 0 24 24"><path d="M14 3.23v2.06c2.89.86 5 3.54 5 6.71 0 .94-.2 1.82-.54 2.64l1.51 1.51A8.8 8.8 0 0 0 21 12c0-4.28-3-7.86-7-8.77zM3 9v6h4l5 5V4L7 9H3zM14 9.82v4.36c1.19-.69 2-1.97 2-3.18s-.81-2.49-2-3.18z"/></svg>
     </button>
     <input type=range id=vol-slider min=0 max=100 value=0
       oninput="pvol(this.value)" onchange="svol(this.value)">
     <span id=vv>0&nbsp;%</span>
-    <button class="cb sm" onclick="c('vu')" title="Lauter">
+    <button class="cb sm" id=bvu onclick="c('vu')" title="Lauter">
       <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4-.91 7-4.49 7-8.77s-3-7.86-7-8.77zM14 9.82v4.36c1.19-.69 2-1.97 2-3.18s-.81-2.49-2-3.18z"/></svg>
     </button>
-    <button class="cb sm mute" onclick="c('mut')" title="Stummschalten">
+    <button class="cb sm mute" id=bmut onclick="c('mut')" title="Stummschalten">
       <svg viewBox="0 0 24 24"><path d="M16.5 12A4.5 4.5 0 0 0 14 7.97v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.8 8.8 0 0 0 21 12c0-4.28-3-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06A8.99 8.99 0 0 0 17.73 18L19 19.27 20.27 18 5.27 3 4.27 3zM12 4 9.91 6.09 12 8.18V4z"/></svg>
     </button>
   </div>
@@ -391,13 +394,14 @@ body{display:flex;flex-direction:column;min-height:100vh;max-width:560px;margin:
   </a>
 </nav>
 <script>
-var dur=0,prevCover='',volTimer=null;
+var dur=0,prevCover='',volTimer=null,volMuted=false;
 var RPT=['Wiederholen: aus','Wiederholen: Titel','Wiederholen: Playlist'];
 var SHF=['Zufall: aus','Zufall: Titel','Zufall: Alben'];
 function fmt(s){s=Math.round(s);return Math.floor(s/60)+':'+(s%60<10?'0':'')+s%60;}
 function txt(id,val){var e=document.getElementById(id);if(e&&e.textContent!==val)e.textContent=val;}
 function cls(id,val){var e=document.getElementById(id);if(e&&e.className!==val)e.className=val;}
 function vis(id,show){var e=document.getElementById(id);if(e)e.style.display=show?'':'none';}
+function dis(id,disabled){var e=document.getElementById(id);if(e)e.disabled=disabled;}
 function upd(d){
   if(!d)return;
   var ntc=document.getElementById('notice');
@@ -418,6 +422,12 @@ function upd(d){
   vis('ico-play',!playing);
   vis('ico-pause',playing);
   cls('bpl','cb play'+(playing?'':' paused'));
+  volMuted=d.muted||false;
+  cls('ctrl-volume',''+(volMuted?'vol-muted':''));
+  dis('vol-slider',volMuted);
+  dis('bvd',volMuted);
+  dis('bvu',volMuted);
+  cls('bmut','cb sm mute'+(volMuted?' on':''));
   if(!volTimer){
     var v=d.volume||0;
     document.getElementById('vol-slider').value=v;
@@ -457,11 +467,13 @@ function c(cmd){
     body:JSON.stringify({cmd:cmd})}).then(function(){setTimeout(poll,800);});
 }
 function pvol(v){
+  if(volMuted)return;
   txt('vv',v+'\u00a0%');
   if(volTimer)clearTimeout(volTimer);
   volTimer=setTimeout(function(){volTimer=null;},1500);
 }
 function svol(v){
+  if(volMuted)return;
   if(volTimer)clearTimeout(volTimer);
   volTimer=null;
   document.getElementById('vol-slider').value=v;
@@ -747,6 +759,7 @@ static String statusToJson() {
     doc["duration"]   = s.duration;
     doc["position"]   = s.position;
     doc["volume"]     = s.volume;
+    doc["muted"]      = s.muted;
     doc["repeatMode"] = s.repeatMode;
     doc["shuffleMode"]= s.shuffleMode;
     doc["playerName"] = s.playerName;
@@ -760,6 +773,14 @@ static void setCachedStatusVolume(int volume) {
     if (!g_statusMux) return;
     xSemaphoreTake(g_statusMux, portMAX_DELAY);
     g_status.volume = constrain(volume, 0, 100);
+    g_status.muted = false;
+    xSemaphoreGive(g_statusMux);
+}
+
+static void setCachedStatusMuted(bool muted) {
+    if (!g_statusMux) return;
+    xSemaphoreTake(g_statusMux, portMAX_DELAY);
+    g_status.muted = muted && g_status.volume > 0;
     xSemaphoreGive(g_statusMux);
 }
 
@@ -872,23 +893,35 @@ static void setupRoutes() {
             else if (cmd == "next")   ok = squeezeNext(mac);
             else if (cmd == "prev")   ok = squeezePrev(mac);
             else if (cmd == "vu") {
-                int nextVolume = constrain(status.volume + 1, 0, 100);
-                ok = squeezeSetVolume(mac, nextVolume);
-                if (ok) setCachedStatusVolume(nextVolume);
+                if (status.muted) {
+                    ok = true;
+                } else {
+                    int nextVolume = constrain(status.volume + 1, 0, 100);
+                    ok = squeezeSetVolume(mac, nextVolume);
+                    if (ok) setCachedStatusVolume(nextVolume);
+                }
             }
             else if (cmd == "vd") {
-                int nextVolume = constrain(status.volume - 1, 0, 100);
-                ok = squeezeSetVolume(mac, nextVolume);
-                if (ok) setCachedStatusVolume(nextVolume);
+                if (status.muted) {
+                    ok = true;
+                } else {
+                    int nextVolume = constrain(status.volume - 1, 0, 100);
+                    ok = squeezeSetVolume(mac, nextVolume);
+                    if (ok) setCachedStatusVolume(nextVolume);
+                }
             }
             else if (cmd == "mut") {
-                ok = squeezeSetVolume(mac, 0);
-                if (ok) setCachedStatusVolume(0);
+                ok = squeezeToggleMute(mac);
+                if (ok) setCachedStatusMuted(!status.muted);
             }
             else if (cmd.startsWith("vol:")) {
-                int v = constrain(cmd.substring(4).toInt(), 0, 100);
-                ok = squeezeSetVolume(mac, v);
-                if (ok) setCachedStatusVolume(v);
+                if (status.muted) {
+                    ok = true;
+                } else {
+                    int v = constrain(cmd.substring(4).toInt(), 0, 100);
+                    ok = squeezeSetVolume(mac, v);
+                    if (ok) setCachedStatusVolume(v);
+                }
             }
             else if (cmd == "rpt")    ok = squeezeSetRepeat (mac, (status.repeatMode  + 1) % 3);
             else if (cmd == "shf")    ok = squeezeSetShuffle(mac, (status.shuffleMode + 1) % 3);

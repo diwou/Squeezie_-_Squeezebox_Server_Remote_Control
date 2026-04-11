@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "scripts": {
+    "spell": "cspell --config cspell.json README.md CHANGELOG.md \"src/**/*.{h,cpp}\" \"include/**/*.h\""
+  },
+  "devDependencies": {
+    "@cspell/dict-de-de": "4.1.2",
+    "cspell": "8.19.4"
+  }
+}

@@ -4,6 +4,23 @@ Alle wichtigen Änderungen an diesem Projekt werden hier dokumentiert.
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/)
 und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang/de/).
 
+Ab jetzt sollen Codeberg-/Commit-Referenzen direkt an den einzelnen Änderungspunkten stehen,
+damit auch bei mehreren Commits am selben Tag jede Änderung eindeutig nachvollziehbar bleibt.
+Release-IDs werden nur bei echten Releases dokumentiert.
+
+## [Next]
+
+### Behoben
+- **Webinterface-Muting an LMS-/Squeezer-Verhalten angepasst**: der Mute-Button nutzt jetzt
+  wie Squeezer `mixer muting 1/0`; negative LMS-Lautstärkewerte werden als Mute-Zustand erkannt,
+  aber im Web und auf dem Display weiter positiv angezeigt. Während Mute sind Slider, Bargraph
+  sowie Lauter-/Leiser-Buttons deaktiviert; das Display hat dafür einen eigenen Mute-Button in
+  der Lautstärkezeile bekommen. Die alte UI-zu-LMS-`6..100`-Umrechnung wurde zugunsten direkter
+  LMS-Werte entfernt. [`pending`]
+- **CSpell-Konfiguration aktualisiert**: das deutsche CSpell-Wörterbuch ist jetzt projektlokal
+  eingebunden und per `npm run spell` reproduzierbar ausführbar; projekt- und LMS-spezifische
+  Fachbegriffe wurden ergänzt. [`pending`]
+
 ## [0.4.1] — 2026-04-09
 
 ### Hinzugefügt

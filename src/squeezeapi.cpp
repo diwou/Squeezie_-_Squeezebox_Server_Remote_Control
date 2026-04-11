@@ -10,17 +10,11 @@ static String   g_host;
 static uint16_t g_port = LYRION_DEFAULT_PORT;
 
 int squeezeVolumeFromLms(int lmsVolume) {
-    if (lmsVolume <= SQUEEZE_VOL_MIN) return 0;
-    return constrain((int)lroundf((lmsVolume - SQUEEZE_VOL_MIN) * 100.0f
-                                  / (100.0f - SQUEEZE_VOL_MIN)), 0, 100);
+    return constrain(abs(lmsVolume), 0, 100);
 }
 
 int squeezeVolumeToLms(int uiVolume) {
-    int clamped = constrain(uiVolume, 0, 100);
-    if (clamped <= 0) return SQUEEZE_VOL_MIN;
-    return constrain((int)lroundf(SQUEEZE_VOL_MIN
-                                  + clamped * (100.0f - SQUEEZE_VOL_MIN) / 100.0f),
-                     SQUEEZE_VOL_MIN, 100);
+    return constrain(uiVolume, 0, 100);
 }
 
 void squeezeSetServer(const String& host, uint16_t port) {
@@ -110,8 +104,10 @@ bool squeezeGetStatus(const String& playerMac, SqueezieStatus& out) {
     JsonObject r = resp["result"].as<JsonObject>();
     if (r.isNull()) return false;
     String mode     = r["mode"].as<String>();
+    int rawVolume   = r["mixer volume"].as<int>();
     out.playing     = (mode == "play");
-    out.volume      = constrain(r["mixer volume"].as<int>(), 0, 100);
+    out.volume      = squeezeVolumeFromLms(rawVolume);
+    out.muted       = rawVolume < 0;
     out.repeatMode  = r["playlist repeat"].as<int>();
     out.shuffleMode = r["playlist shuffle"].as<int>();
     out.position    = (int)r["time"].as<float>();
@@ -139,9 +135,9 @@ bool squeezeGetStatus(const String& playerMac, SqueezieStatus& out) {
             }
         }
     }
-    srvLog("[LMS] %s | vol=%d pos=%d pf=%d",
+    srvLog("[LMS] %s | vol=%d%s pos=%d pf=%d",
            out.title.isEmpty() ? "-" : out.title.c_str(),
-           out.volume, out.position, out.nextCount);
+           out.volume, out.muted ? " muted" : "", out.position, out.nextCount);
     return true;
 }
 
@@ -185,13 +181,18 @@ String squeezeCoverUrl(const String& coverId, int size) {
 // ─── Mute ────────────────────────────────────────────────────────────────────
 
 bool squeezeToggleMute(const String& mac) {
+    JsonDocument volumeResp;
+    if (!jsonRpc(mac, "[\"mixer\",\"volume\",\"?\"]", volumeResp)) return false;
+    int rawVolume = volumeResp["result"]["_volume"].as<int>();
+    if (rawVolume == 0) return true;
+
     JsonDocument d;
-    return jsonRpc(mac, "[\"mixer\",\"muting\"]", d);
+    return jsonRpc(mac, "[\"mixer\",\"muting\",\"" + String(rawVolume < 0 ? "0" : "1") + "\"]", d);
 }
 
 bool squeezeSetMute(const String& mac, bool mute) {
     JsonDocument d;
-    return jsonRpc(mac, "[\"mixer\",\"muting\"," + String(mute ? "1" : "0") + "]", d);
+    return jsonRpc(mac, "[\"mixer\",\"muting\",\"" + String(mute ? "1" : "0") + "\"]", d);
 }
 
 // ─── Playlists ───────────────────────────────────────────────────────────────

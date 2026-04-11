@@ -4,6 +4,9 @@
 .piolibdeps/
 .pioinit
 
+# Node/CSpell Dependencies
+node_modules/
+
 # Kompilierte Firmware/Debug-Artefakte, falls sie lokal kopiert werden
 *.bin
 *.elf
