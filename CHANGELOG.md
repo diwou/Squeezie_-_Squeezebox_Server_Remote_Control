@@ -16,10 +16,10 @@ Release-IDs werden nur bei echten Releases dokumentiert.
   aber im Web und auf dem Display weiter positiv angezeigt. Während Mute sind Slider, Bargraph
   sowie Lauter-/Leiser-Buttons deaktiviert; das Display hat dafür einen eigenen Mute-Button in
   der Lautstärkezeile bekommen. Die alte UI-zu-LMS-`6..100`-Umrechnung wurde zugunsten direkter
-  LMS-Werte entfernt. [`pending`]
+  LMS-Werte entfernt. [`263af2c`]
 - **CSpell-Konfiguration aktualisiert**: das deutsche CSpell-Wörterbuch ist jetzt projektlokal
   eingebunden und per `npm run spell` reproduzierbar ausführbar; projekt- und LMS-spezifische
-  Fachbegriffe wurden ergänzt. [`pending`]
+  Fachbegriffe wurden ergänzt. [`263af2c`]
 
 ## [0.4.1] — 2026-04-09
 
