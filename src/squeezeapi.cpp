@@ -32,17 +32,33 @@ uint16_t squeezeGetPort() { return g_port; }
 static bool jsonRpc(const String& playerMac, const String& cmdJson, JsonDocument& resp) {
     if (g_host.isEmpty()) return false;
     HTTPClient http;
-    String url = "http://" + g_host + ":" + String(g_port) + "/jsonrpc.js";
+    String url;
+    url.reserve(g_host.length() + cmdJson.length() + playerMac.length() + 32);
+    url = "http://";
+    url += g_host;
+    url += ':';
+    url += String(g_port);
+    url += "/jsonrpc.js";
     if (!http.begin(url)) return false;
     http.addHeader("Content-Type", "application/json");
     http.setTimeout(2000);
-    String body = "{\"id\":1,\"method\":\"slim.request\",\"params\":[\""
-                  + playerMac + "\"," + cmdJson + "]}";
+    String body;
+    body.reserve(playerMac.length() + cmdJson.length() + 64);
+    body = "{\"id\":1,\"method\":\"slim.request\",\"params\":[\"";
+    body += playerMac;
+    body += "\",";
+    body += cmdJson;
+    body += "]}";
     int code = http.POST(body);
     if (code != 200) { http.end(); return false; }
-    String payload = http.getString();
+    WiFiClient* stream = http.getStreamPtr();
+    if (!stream) {
+        http.end();
+        return false;
+    }
+    bool ok = !deserializeJson(resp, *stream);
     http.end();
-    return !deserializeJson(resp, payload);
+    return ok;
 }
 
 static String coverUrlForId(const String& coverId, int size) {

@@ -8,7 +8,7 @@ Ab jetzt sollen Codeberg-/Commit-Referenzen direkt an den einzelnen Änderungspu
 damit auch bei mehreren Commits am selben Tag jede Änderung eindeutig nachvollziehbar bleibt.
 Release-IDs werden nur bei echten Releases dokumentiert.
 
-## [Next]
+## [0.4.2] — 2026-04-20
 
 ### Behoben
 - **Webinterface-Muting an LMS-/Squeezer-Verhalten angepasst**: der Mute-Button nutzt jetzt
@@ -24,6 +24,11 @@ Release-IDs werden nur bei echten Releases dokumentiert.
   automatisch `firmware.bin`, Bootloader, Partitionsdatei, `boot_app0.bin` und Manifest nach
   `Firmware/<Version>/` sowie `Firmware/latest/`, wobei die Version aus `APP_VERSION` gelesen
   wird. [`ce9de8f`]
+- **Langlaufstabilität beim Cover-Laden verbessert**: der Cover-Vorladepfad greift
+  nicht mehr von einem Hintergrund-Task direkt auf Display-Status-Strings zu, sondern
+  schreibt nur noch in die dafür vorgesehenen Download-Zwischenpuffer. Zusätzlich
+  wurde der LMS-JSON-RPC-Pfad entschlackt, damit pro Anfrage weniger temporäre Heap-
+  Allokationen entstehen und sich der Speicher über lange Laufzeiten weniger fragmentiert.
 
 ## [0.4.1] — 2026-04-09
 

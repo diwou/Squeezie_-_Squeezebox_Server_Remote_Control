@@ -1049,18 +1049,14 @@ void displayPreloadCover(const String& url, const String& cacheKey) {
     String key = cacheKey.isEmpty() ? url : cacheKey;
     xSemaphoreTake(g_coverMux, portMAX_DELAY);
     bool coverTaskRunning = (g_coverTask != nullptr);
-    bool alreadyLoaded = (g_dispatchedCoverUrl == url && g_dispatchedCoverKey == key && g_coverLen > 0);
+    bool alreadyLoaded = (g_coverLen > 0 && g_loadedCoverKey == key);
     xSemaphoreGive(g_coverMux);
     if (coverTaskRunning || alreadyLoaded) return; // Download läuft bereits / schon geladen
 
     xSemaphoreTake(g_coverMux, portMAX_DELAY);
-    g_dCoverUrl          = url;
-    g_dCoverKey          = key;
     g_pendingCoverUrl    = url;
     g_pendingCoverKey    = key;
     g_dlGen              = ++g_coverGen;
-    g_dispatchedCoverUrl = url;
-    g_dispatchedCoverKey = key;
     g_coverReady         = false;
     g_coverLen           = 0;
     g_loadedCoverKey     = "";
