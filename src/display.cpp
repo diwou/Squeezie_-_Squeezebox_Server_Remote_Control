@@ -1028,10 +1028,8 @@ static void prefetchTask(void*) {
 
 // Aus beliebigem Task aufrufbar (z.B. lmsPoll) — befüllt Prefetch-Queue
 void displayQueuePrefetch(const String* urls, const String* keys, int count) {
-    (void)urls;
-    (void)keys;
-    (void)count;
     if (!g_pfMux) return;
+    int limit = max(0, min(count, SQUEEZE_PREFETCH));
     xSemaphoreTake(g_pfMux, portMAX_DELAY);
     g_pfQueueCount = 0;
     for (int i = 0; i < SQUEEZE_PREFETCH; i++) {
@@ -1040,7 +1038,22 @@ void displayQueuePrefetch(const String* urls, const String* keys, int count) {
         g_pf[i].url = "";
         g_pf[i].key = "";
     }
+    for (int i = 0; i < limit; i++) {
+        if (!urls || urls[i].isEmpty()) continue;
+        g_pfQueue[g_pfQueueCount] = urls[i];
+        g_pfQueueKeys[g_pfQueueCount] = (keys && !keys[i].isEmpty()) ? keys[i] : urls[i];
+        g_pfQueueCount++;
+    }
+    bool startTask = (g_pfQueueCount > 0 && g_pfTask == nullptr);
     xSemaphoreGive(g_pfMux);
+    if (startTask) {
+        xSemaphoreTake(g_pfMux, portMAX_DELAY);
+        if (g_pfTask == nullptr && g_pfQueueCount > 0) {
+            xTaskCreatePinnedToCore(prefetchTask, "prefetch", 8192,
+                                    nullptr, 1, (TaskHandle_t*)&g_pfTask, 0);
+        }
+        xSemaphoreGive(g_pfMux);
+    }
 }
 
 // Aus beliebigem Task aufrufbar (z.B. lmsPoll auf Core 0) — startet Cover-Download sofort

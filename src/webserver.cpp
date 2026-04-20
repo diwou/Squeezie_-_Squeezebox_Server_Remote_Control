@@ -797,6 +797,7 @@ bool wifiPollNow() {
     xSemaphoreTake(g_statusMux, portMAX_DELAY);
     g_status = tmp;
     xSemaphoreGive(g_statusMux);
+    displayQueuePrefetch(tmp.nextCoverUrls, tmp.nextCoverKeys, tmp.nextCount);
     displayPreloadCover(tmp.coverUrl, tmp.coverKey);
     return true;
 }

@@ -21,6 +21,8 @@ node_modules/
 .vscode/.browse.c_cpp.db*
 .vscode/ipch/
 .clangd
+include/version_generated.h
+scripts/__pycache__/
 
 # Von `pio run -t compiledb` generiert
 compile_commands.json

@@ -11,6 +11,12 @@ Release-IDs werden nur bei echten Releases dokumentiert.
 ## [0.4.2] — 2026-04-20
 
 ### Behoben
+- **Versionsanzeige vereinheitlicht**: der Startbildschirm und der Firmware-Export verwenden jetzt
+  dieselbe build-abhängige Versionsquelle. Development-Builds bekommen automatisch den
+  letzten Codeberg-Commit-Hash als Suffix, Production-Releases bleiben ohne Suffix bei der
+  reinen Release-Version.
+- **Prefetch-Queue wieder aktiviert**: die Queue nimmt die vom LMS gelieferten Cover-URLs
+  wieder tatsächlich an und startet den Prefetch-Task, statt den Eingang nur zu leeren.
 - **Webinterface-Muting an LMS-/Squeezer-Verhalten angepasst**: der Mute-Button nutzt jetzt
   wie Squeezer `mixer muting 1/0`; negative LMS-Lautstärkewerte werden als Mute-Zustand erkannt,
   aber im Web und auf dem Display weiter positiv angezeigt. Während Mute sind Slider, Bargraph

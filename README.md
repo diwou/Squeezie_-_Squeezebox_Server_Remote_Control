@@ -68,7 +68,7 @@ Die Kalibrierungsdaten werden im NVS (Flash) gespeichert und bei jedem Neustart 
 
 **Neu kalibrieren:** Obere linke Ecke des Displays 3 Sekunden gedrückt halten.
 
-## Aktueller Stand — v0.3.2
+## Aktueller Stand — Development v0.4.2+dcb4ab3
 
 ### Player-Screen (Touch-Display)
 

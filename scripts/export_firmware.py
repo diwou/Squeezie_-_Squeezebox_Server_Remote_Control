@@ -1,6 +1,6 @@
 from pathlib import Path
 import json
-import re
+import sys
 import shutil
 
 Import("env")
@@ -8,14 +8,10 @@ Import("env")
 PROJECT_NAME = "Squeezie"
 CHIP_FAMILY = "ESP32-S3"
 
+scripts_dir = Path(env["PROJECT_DIR"]) / "scripts"
+sys.path.insert(0, str(scripts_dir))
 
-def read_app_version():
-    config_path = Path(env["PROJECT_DIR"]) / "include" / "config.h"
-    text = config_path.read_text(encoding="utf-8")
-    match = re.search(r'#define\s+APP_VERSION\s+"([^"]+)"', text)
-    if not match:
-        raise ValueError("APP_VERSION konnte in include/config.h nicht gefunden werden")
-    return match.group(1)
+from versioning import build_version_string
 
 
 def ensure_dir(path: Path):
@@ -48,7 +44,7 @@ def build_manifest(version: str):
 
 def export_firmware(source, target, env):
     project_dir = Path(env["PROJECT_DIR"])
-    version = read_app_version()
+    version = build_version_string(project_dir)
     firmware_bin = Path(source[0].get_abspath())
     build_dir = firmware_bin.parent
 

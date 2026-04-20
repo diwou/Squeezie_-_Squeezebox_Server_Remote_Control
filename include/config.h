@@ -5,7 +5,13 @@
 // =============================================================================
 
 // --- Anwendung ---
-#define APP_VERSION "0.4.1"
+#define APP_VERSION_BASE "0.4.2"
+#if __has_include("version_generated.h")
+#include "version_generated.h"
+#endif
+#ifndef APP_VERSION
+#define APP_VERSION APP_VERSION_BASE
+#endif
 
 // --- Pins ---
 #define PIN_TFT_BL      7   // Hintergrundbeleuchtung (HIGH = an)
