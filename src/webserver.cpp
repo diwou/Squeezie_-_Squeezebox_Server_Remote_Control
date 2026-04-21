@@ -54,7 +54,12 @@ static int               g_otaError    = 0;       // letzter OTA-Fehlercode
 // ─── Konfigurationsstrukturen ────────────────────────────────────────────────
 
 struct NetCfg { String ssid, pass, ip, mask, gw, dns, ntp; bool dhcp = true; };
-struct SrvCfg { String host, playerMac; uint16_t port = LYRION_DEFAULT_PORT; int scrollSpeed = 30; };
+struct SrvCfg {
+    String host, playerMac;
+    uint16_t port = LYRION_DEFAULT_PORT;
+    int scrollSpeed = 30;
+    bool syncVolume = true;
+};
 
 static NetCfg g_net;
 static SrvCfg g_srv;
@@ -76,6 +81,7 @@ static void loadCfg() {
     g_srv.host        = p.getString(NVS_KEY_SRV_HOST,   "");
     g_srv.port        = p.getUShort(NVS_KEY_SRV_PORT,   LYRION_DEFAULT_PORT);
     g_srv.playerMac   = p.getString(NVS_KEY_PLAYER_MAC, "");
+    g_srv.syncVolume  = p.getBool  (NVS_KEY_SYNC_VOL,   true);
     g_srv.scrollSpeed = p.getInt   (NVS_KEY_SCROLL_SPD, 30);
     g_playlistId      = p.getString(NVS_KEY_PL_ID,      "");
     g_playlistName    = p.getString(NVS_KEY_PL_NAME,    "");
@@ -93,6 +99,7 @@ static void saveSrvCfg() {
     Preferences p; p.begin(NVS_NAMESPACE, false);
     p.putString(NVS_KEY_SRV_HOST,   g_srv.host);  p.putUShort(NVS_KEY_SRV_PORT,   g_srv.port);
     p.putString(NVS_KEY_PLAYER_MAC, g_srv.playerMac); p.putInt(NVS_KEY_SCROLL_SPD, g_srv.scrollSpeed);
+    p.putBool  (NVS_KEY_SYNC_VOL,   g_srv.syncVolume);
     p.end();
 }
 static void savePlaylistCfg() {
@@ -573,6 +580,10 @@ body{max-width:560px;margin:0 auto;display:flex;flex-direction:column;min-height
       <div><label class=lbl>Server-Adresse&nbsp;/&nbsp;IP</label><input type=text id=sh placeholder="192.168.1.x"></div>
       <div><label class=lbl>Port</label><input type=number id=sp min=1 max=65535></div>
     </div>
+    <div class=chk>
+      <input type=checkbox id=sv>
+      <span>Gruppenlautstärke für synchronisierte Player</span>
+    </div>
     <div style="display:flex;gap:10px;margin-bottom:0">
       <button class=btn onclick=scan() id=scan-btn>Automatisch suchen</button>
       <button class="btn primary" onclick=svSrv() style="flex:1">Speichern</button>
@@ -650,7 +661,8 @@ function svSrv(){
   var d={srvHost:document.getElementById('sh').value,
     srvPort:parseInt(document.getElementById('sp').value)||9000,
     scrollSpeed:parseInt(document.getElementById('sc').value)||30,
-    playerMac:mac};
+    playerMac:mac,
+    syncVolume:document.getElementById('sv').checked};
   fetch('/api/config/server',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)})
   .then(function(r){return r.json();})
   .then(function(r){alert(r.ok?'Gespeichert!':'Fehler: '+(r.error||''));})
@@ -729,6 +741,7 @@ fetch('/api/config').then(function(r){return r.json();}).then(function(d){
   document.getElementById('nt').value=d.ntp||'pool.ntp.org';
   document.getElementById('sh').value=d.srvHost||'';document.getElementById('sp').value=d.srvPort||9000;
   document.getElementById('sc').value=d.scrollSpeed||30;
+  document.getElementById('sv').checked=d.syncVolume!==false;
   mac=d.playerMac||'';
   curPlId=d.playlistId||'';
   if(d.playlistName)document.getElementById('cur-pl').textContent=d.playlistName;
@@ -782,6 +795,24 @@ static void setCachedStatusMuted(bool muted) {
     xSemaphoreTake(g_statusMux, portMAX_DELAY);
     g_status.muted = muted && g_status.volume > 0;
     xSemaphoreGive(g_statusMux);
+}
+
+static void addUniqueTarget(std::vector<String>& out, const String& mac) {
+    if (mac.isEmpty()) return;
+    for (const String& existing : out) {
+        if (existing == mac) return;
+    }
+    out.push_back(mac);
+}
+
+static std::vector<String> volumeTargetsForPlayer(const String& mac) {
+    std::vector<String> targets;
+    if (mac.isEmpty()) return targets;
+    if (g_srv.syncVolume) {
+        squeezeGetSyncGroupMembers(mac, targets);
+    }
+    addUniqueTarget(targets, mac);
+    return targets;
 }
 
 bool wifiPollNow() {
@@ -898,7 +929,11 @@ static void setupRoutes() {
                     ok = true;
                 } else {
                     int nextVolume = constrain(status.volume + 1, 0, 100);
-                    ok = squeezeSetVolume(mac, nextVolume);
+                    std::vector<String> targets = volumeTargetsForPlayer(mac);
+                    ok = false;
+                    for (const String& target : targets) {
+                        if (squeezeSetVolume(target, nextVolume)) ok = true;
+                    }
                     if (ok) setCachedStatusVolume(nextVolume);
                 }
             }
@@ -907,12 +942,21 @@ static void setupRoutes() {
                     ok = true;
                 } else {
                     int nextVolume = constrain(status.volume - 1, 0, 100);
-                    ok = squeezeSetVolume(mac, nextVolume);
+                    std::vector<String> targets = volumeTargetsForPlayer(mac);
+                    ok = false;
+                    for (const String& target : targets) {
+                        if (squeezeSetVolume(target, nextVolume)) ok = true;
+                    }
                     if (ok) setCachedStatusVolume(nextVolume);
                 }
             }
             else if (cmd == "mut") {
-                ok = squeezeToggleMute(mac);
+                bool nextMute = !status.muted;
+                std::vector<String> targets = volumeTargetsForPlayer(mac);
+                ok = false;
+                for (const String& target : targets) {
+                    if (squeezeSetMute(target, nextMute)) ok = true;
+                }
                 if (ok) setCachedStatusMuted(!status.muted);
             }
             else if (cmd.startsWith("vol:")) {
@@ -920,7 +964,11 @@ static void setupRoutes() {
                     ok = true;
                 } else {
                     int v = constrain(cmd.substring(4).toInt(), 0, 100);
-                    ok = squeezeSetVolume(mac, v);
+                    std::vector<String> targets = volumeTargetsForPlayer(mac);
+                    ok = false;
+                    for (const String& target : targets) {
+                        if (squeezeSetVolume(target, v)) ok = true;
+                    }
                     if (ok) setCachedStatusVolume(v);
                 }
             }
@@ -987,6 +1035,7 @@ static void setupRoutes() {
         doc["ntp"]         = g_net.ntp;
         doc["srvHost"]     = g_srv.host;  doc["srvPort"]      = g_srv.port;
         doc["playerMac"]   = g_srv.playerMac; doc["scrollSpeed"] = g_srv.scrollSpeed;
+        doc["syncVolume"]  = g_srv.syncVolume;
         doc["playlistId"]  = g_playlistId;   doc["playlistName"] = g_playlistName;
         doc["deviceIp"]    = wifiGetIP();
         String out; serializeJson(doc, out);
@@ -1028,6 +1077,7 @@ static void setupRoutes() {
                 if (doc["srvHost"].as<String>().length() > 0) g_srv.host = doc["srvHost"].as<String>();
                 g_srv.port        = doc["srvPort"]     | (int)g_srv.port;
                 g_srv.scrollSpeed = doc["scrollSpeed"] | g_srv.scrollSpeed;
+                g_srv.syncVolume  = doc["syncVolume"]  | g_srv.syncVolume;
                 if (doc["playerMac"].as<String>().length() > 0)
                     g_srv.playerMac = doc["playerMac"].as<String>();
                 saveSrvCfg();
@@ -1243,6 +1293,7 @@ SqueezieStatus squeezieGetCachedStatus() {
 }
 String                wifiGetPlayerMac()         { return g_srv.playerMac; }
 int                   wifiGetScrollSpeed()        { return g_srv.scrollSpeed; }
+bool                  wifiGetSyncVolume()         { return g_srv.syncVolume; }
 
 void wifiSetServer(const String& host, uint16_t port) {
     g_srv.host = host;
@@ -1257,6 +1308,11 @@ void wifiSetPlayer(const String& mac) {
     saveSrvCfg();
     g_forceRepoll = true;
     srvLog("[Settings] Player MAC: %s", mac.c_str());
+}
+void wifiSetSyncVolume(bool enabled) {
+    g_srv.syncVolume = enabled;
+    saveSrvCfg();
+    srvLog("[Settings] Gruppenlautstärke: %s", enabled ? "an" : "aus");
 }
 String wifiGetPlaylistId()   { return g_playlistId; }
 String wifiGetPlaylistName() { return g_playlistName; }

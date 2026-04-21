@@ -8,6 +8,14 @@ Ab jetzt sollen Codeberg-/Commit-Referenzen direkt an den einzelnen Änderungspu
 damit auch bei mehreren Commits am selben Tag jede Änderung eindeutig nachvollziehbar bleibt.
 Release-IDs werden nur bei echten Releases dokumentiert.
 
+## [0.4.3] — 2026-04-21
+
+### Hinzugefügt
+- **Gruppenlautstärke für Sync-Player**: Lautstärkeänderungen über Touch-Display und Webinterface
+  werden jetzt auf alle Player einer Lyrion-Sync-Gruppe angewendet, damit Multiroom-Setups
+  synchron dieselbe Lautstärke behalten. Die Funktion lässt sich in beiden Einstellungen-
+  Oberflächen ein- und ausschalten. [`5e0e372`]
+
 ## [0.4.2] — 2026-04-20
 
 ### Behoben

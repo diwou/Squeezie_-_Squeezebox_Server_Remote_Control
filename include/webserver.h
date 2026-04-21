@@ -17,8 +17,10 @@ String          wifiGetIP();
 SqueezieStatus        squeezieGetCachedStatus(); // gibt Snapshot zurück (thread-safe)
 String                wifiGetPlayerMac();
 int                   wifiGetScrollSpeed(); // Scroll-Geschwindigkeit in ms/Pixel (aus NVS)
+bool                  wifiGetSyncVolume();
 void                  wifiSetServer(const String& host, uint16_t port); // setzt + speichert in NVS
 void                  wifiSetPlayer(const String& mac);                 // setzt + speichert in NVS
+void                  wifiSetSyncVolume(bool enabled);
 String                wifiGetPlaylistId();
 String                wifiGetPlaylistName();
 bool                  wifiSetPlaylist(const String& playlistId, const String& playlistName,

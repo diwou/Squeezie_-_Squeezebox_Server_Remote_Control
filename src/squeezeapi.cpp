@@ -92,6 +92,72 @@ static String trackKey(JsonObjectConst track) {
     return key;
 }
 
+static void addUniqueString(std::vector<String>& out, const String& value) {
+    if (value.isEmpty()) return;
+    for (const String& existing : out) {
+        if (existing == value) return;
+    }
+    out.push_back(value);
+}
+
+static void appendCsvStrings(const String& csv, std::vector<String>& out) {
+    int start = 0;
+    while (start < csv.length()) {
+        int comma = csv.indexOf(',', start);
+        if (comma < 0) comma = csv.length();
+        String item = csv.substring(start, comma);
+        item.trim();
+        addUniqueString(out, item);
+        start = comma + 1;
+    }
+}
+
+static String jsonStringField(JsonObjectConst obj, const char* key) {
+    JsonVariantConst v = obj[key];
+    if (v.isNull()) return "";
+    return v.as<String>();
+}
+
+static String firstSyncString(JsonObjectConst obj) {
+    const char* preferredKeys[] = {
+        "sync_members",
+        "_sync_members",
+        "sync",
+        "_sync",
+        "syncgroups",
+        "_syncgroups",
+    };
+    for (const char* key : preferredKeys) {
+        String value = jsonStringField(obj, key);
+        if (!value.isEmpty() && value != "-") return value;
+    }
+    for (JsonPairConst kv : obj) {
+        String key = kv.key().c_str();
+        if (key.indexOf("sync") < 0) continue;
+        JsonVariantConst value = kv.value();
+        if (value.isNull()) continue;
+        String text = value.as<String>();
+        if (!text.isEmpty() && text != "-") return text;
+    }
+    return "";
+}
+
+static void collectSyncMembersFromResponse(JsonObjectConst result, std::vector<String>& out) {
+    String members = firstSyncString(result);
+    if (members.isEmpty()) return;
+
+    int marker = members.indexOf("sync_members:");
+    if (marker >= 0) {
+        int start = marker + 13;
+        int end = members.indexOf(' ', start);
+        if (end < 0) end = members.length();
+        appendCsvStrings(members.substring(start, end), out);
+        return;
+    }
+
+    appendCsvStrings(members, out);
+}
+
 // ─── Player-Liste ────────────────────────────────────────────────────────────
 
 bool squeezeGetPlayers(std::vector<SqueeziePlayer>& out) {
@@ -108,6 +174,25 @@ bool squeezeGetPlayers(std::vector<SqueeziePlayer>& out) {
         out.push_back(pl);
     }
     return true;
+}
+
+bool squeezeGetSyncGroupMembers(const String& playerMac, std::vector<String>& out) {
+    out.clear();
+    addUniqueString(out, playerMac);
+    if (playerMac.isEmpty()) return false;
+
+    JsonDocument resp;
+    if (jsonRpc("", "[\"syncgroups\",\"?\"]", resp)) {
+        JsonObject result = resp["result"].as<JsonObject>();
+        if (!result.isNull()) collectSyncMembersFromResponse(result, out);
+    }
+
+    if (out.size() <= 1 && jsonRpc(playerMac, "[\"sync\",\"?\"]", resp)) {
+        JsonObject result = resp["result"].as<JsonObject>();
+        if (!result.isNull()) collectSyncMembersFromResponse(result, out);
+    }
+
+    return !out.empty();
 }
 
 // ─── Status ──────────────────────────────────────────────────────────────────

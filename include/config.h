@@ -5,7 +5,7 @@
 // =============================================================================
 
 // --- Anwendung ---
-#define APP_VERSION_BASE "0.4.2"
+#define APP_VERSION_BASE "0.4.3"
 #if __has_include("version_generated.h")
 #include "version_generated.h"
 #endif
@@ -54,6 +54,7 @@
 #define NVS_KEY_SRV_HOST    "srvHost"
 #define NVS_KEY_SRV_PORT    "srvPort"
 #define NVS_KEY_PLAYER_MAC  "playerMAC"
+#define NVS_KEY_SYNC_VOL    "syncVol"
 #define NVS_KEY_SCROLL_SPD  "scrollSpd"
 #define NVS_KEY_PL_ID       "plId"
 #define NVS_KEY_PL_NAME     "plName"

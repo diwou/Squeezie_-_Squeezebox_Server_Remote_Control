@@ -2,6 +2,12 @@
 
 ESP32-S3-basierte Fernsteuerung für einen Lyrion/Squeezebox-Medienserver mit ILI9488 3,5" Touchdisplay.
 
+## Projekt-Metadaten
+
+- **Repository**: https://codeberg.org/diwou/Squeezie_-_Squeezebox_Server_Remote_Control
+- **Lizenz**: CC BY-NC-SA 4.0
+- **Version**: Development v0.4.3+5e0e372
+
 ## Hardware
 
 | Komponente | Modell |
@@ -68,7 +74,7 @@ Die Kalibrierungsdaten werden im NVS (Flash) gespeichert und bei jedem Neustart 
 
 **Neu kalibrieren:** Obere linke Ecke des Displays 3 Sekunden gedrückt halten.
 
-## Aktueller Stand — Development v0.4.2+dcb4ab3
+## Aktueller Stand — Development v0.4.3+5e0e372
 
 ### Player-Screen (Touch-Display)
 
@@ -77,9 +83,10 @@ Die Kalibrierungsdaten werden im NVS (Flash) gespeichert und bei jedem Neustart 
 - **Fortschrittsbalken** mit Zeitanzeige, antippen zum Seekten
 - **Transport-Buttons**: |< / Pause/Play / >|
 - **Lautstärke**: Balken mit [−] / [+], Halten wiederholt
+- **Gruppenlautstärke**: Bei synchronisierten Lyrion-Playern werden Lautstärkeänderungen auf die ganze Sync-Gruppe angewendet und lassen sich in den Einstellungen ein- oder ausschalten
 - **Modus-Buttons**: Wiederholen (aus / Titel / Liste) und Zufall (an/aus)
 - **Uhrzeit** (NTP) in der Statuszeile
-- **Einstellungs-Screen**: Server-Suche per UDP-Discovery, Player-Auswahl
+- **Einstellungs-Screen**: Server-Suche per UDP-Discovery, Player-Auswahl, Sync-Lautstärke-Schalter
 
 ### Webinterface (Browser)
 

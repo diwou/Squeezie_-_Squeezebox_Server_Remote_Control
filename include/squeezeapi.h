@@ -43,6 +43,7 @@ uint16_t squeezeGetPort();
 bool squeezeGetPlayers(std::vector<SqueeziePlayer>& out);
 bool squeezeGetPlaylists(std::vector<SqueeziePlaylist>& out);
 bool squeezeGetStatus(const String& playerMac, SqueezieStatus& out);
+bool squeezeGetSyncGroupMembers(const String& playerMac, std::vector<String>& out);
 
 bool squeezePlay(const String& playerMac);
 bool squeezePause(const String& playerMac);

@@ -63,7 +63,8 @@ static Screen g_screen = SCREEN_NONE;
 #define SET_BTN_W      132
 #define SET_SRV_Y      50
 #define SET_DISC_Y     90
-#define SET_PLR_Y0     154
+#define SET_SYNC_Y     130
+#define SET_PLR_Y0     194
 #define SET_PLR_H      38
 #define SET_PLR_GAP    3
 #define SET_LISTE_X    340   // "LISTE"-Button im Settings-Header
@@ -1200,6 +1201,29 @@ static void drawSettingsDiscRow() {
     }
 }
 
+static void drawSettingsSyncRow() {
+    bool enabled = wifiGetSyncVolume();
+    tft.fillRect(0, SET_SYNC_Y, DISPLAY_WIDTH, 36, COL_BG);
+    tft.fillRoundRect(SET_BOX_X, SET_SYNC_Y, SET_BOX_W, 34, 4,
+                      enabled ? (uint32_t)0x003300 : COL_DARK);
+    tft.drawRoundRect(SET_BOX_X, SET_SYNC_Y, SET_BOX_W, 34, 4,
+                      enabled ? COL_GREEN : COL_MID);
+    tft.setFont(nullptr); tft.setTextSize(2);
+    tft.setTextDatum(ML_DATUM);
+    tft.setTextColor(enabled ? COL_GREEN : COL_LGREY,
+                     enabled ? (uint32_t)0x003300 : COL_DARK);
+    tft.drawString("SYNC-LAUTSTAERKE", SET_BOX_X + 8, SET_SYNC_Y + 17);
+    tft.fillRoundRect(SET_BTN_X, SET_SYNC_Y, SET_BTN_W, 34, 4,
+                      enabled ? COL_GREEN : COL_DARK);
+    tft.drawRoundRect(SET_BTN_X, SET_SYNC_Y, SET_BTN_W, 34, 4,
+                      enabled ? (uint32_t)0x00AA00 : COL_MID);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(enabled ? COL_BG : COL_WHITE,
+                     enabled ? COL_GREEN : COL_DARK);
+    tft.drawString(enabled ? "AN" : "AUS",
+                   SET_BTN_X + SET_BTN_W / 2, SET_SYNC_Y + 17);
+}
+
 static void drawSettingsPlayerList() {
     tft.fillRect(0, SET_PLR_Y0, DISPLAY_WIDTH, DISPLAY_HEIGHT - SET_PLR_Y0, COL_BG);
     String curMac = wifiGetPlayerMac();
@@ -1262,13 +1286,14 @@ static void drawSettingsScreen() {
     tft.drawString("SERVER", 6, 39);
     drawSettingsSrvRow();
     drawSettingsDiscRow();
+    drawSettingsSyncRow();
     // Trennlinie
-    tft.fillRect(0, 130, DISPLAY_WIDTH, 1, COL_MID);
+    tft.fillRect(0, 170, DISPLAY_WIDTH, 1, COL_MID);
     // Abschnitt: Player
     tft.setFont(nullptr); tft.setTextSize(1);
     tft.setTextDatum(ML_DATUM);
     tft.setTextColor(COL_MGREY, COL_BG);
-    tft.drawString("PLAYER", 6, 141);
+    tft.drawString("PLAYER", 6, 181);
     // Player-Liste laden
     g_settPlayers.clear();
     if (!squeezeGetHost().isEmpty()) squeezeGetPlayers(g_settPlayers);
@@ -1310,6 +1335,12 @@ static void handleSettingsTouch(int32_t tx, int32_t ty) {
         g_settPlayers.clear();
         squeezeGetPlayers(g_settPlayers);
         drawSettingsPlayerList();
+        return;
+    }
+    // Gruppenlautstärke ein/aus
+    if (ty >= SET_SYNC_Y && ty < SET_SYNC_Y + 34 && tx >= SET_BOX_X) {
+        wifiSetSyncVolume(!wifiGetSyncVolume());
+        drawSettingsSyncRow();
         return;
     }
     // Player-Auswahl
