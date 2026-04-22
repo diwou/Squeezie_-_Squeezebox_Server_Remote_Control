@@ -11,6 +11,10 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
   Abständen und wartet auf Statusantworten nicht mehr so lange, sodass externe Änderungen an
   Lautstärke, Play/Pause, Seek oder Modi schneller auf Display und Webinterface sichtbar
   werden. [`resp-20260422`]
+- **Lautstärke-Sprünge stabilisiert**: große externe Lautstärkeänderungen werden erst dann in
+  die Anzeige übernommen, wenn derselbe Wert zweimal hintereinander vom LMS gemeldet wurde.
+  So bleiben Zwischenstände wie 15 oder 17 bei einem Sprung auf 20 nicht mehr dauerhaft im
+  Display hängen. [`vol-sync-20260422`]
 
 ## [0.4.3] — 2026-04-21
 

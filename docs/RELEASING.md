@@ -6,7 +6,8 @@ Der Prozess folgt den Konventionen aus [`AGENTS.md`](../AGENTS.md)
 
 ## Verbindliche Kurz-Checkliste
 
-Diese Punkte sind Pflicht, nicht optional:
+Diese Punkte sind Pflicht, nicht optional, und es gibt dafür keine Abkürzung.
+Diese Datei ist ebenfalls eine Vorrangregel und wird nicht frei interpretiert.
 
 1. Erst prüfen, ob `AGENTS.md` und diese Datei aktuelle Vorgaben enthalten.
 2. `CHANGELOG.md` vor dem Release vollständig vorbereiten.
@@ -15,6 +16,7 @@ Diese Punkte sind Pflicht, nicht optional:
 5. Release-Tag und Codeberg-Push nur nach sauberem Arbeitsbaum.
 6. Release nur mit eindeutigen Commit-/ID-Referenzen in den Notes.
 7. Keine Abkürzungen bei der Dokumentation der Release-Schritte.
+8. Wenn du an irgendeinem Punkt unsicher bist, zuerst die Regeln erneut lesen und nicht raten.
 
 **Faustregel:** Ein Release entsteht NICHT durch einen Commit, sondern durch
 ein Tag. Alles andere ist Vorbereitung.
