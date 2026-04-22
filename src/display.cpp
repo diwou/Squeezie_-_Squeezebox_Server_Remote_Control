@@ -1763,18 +1763,32 @@ void displayHandleTouch() {
             if (squeezeNext(mac)) wifiForceRepoll();
         } else if ((long)(tx - 240) * (tx - 240) + (long)(ty - cy) * (ty - cy) <= 33L * 33L) {
             bool ok = g_dPlaying ? squeezePause(mac) : squeezePlay(mac);
-            if (ok) wifiForceRepoll();
+            if (ok) {
+                SqueezieStatus cached = squeezieGetCachedStatus();
+                cached.playing = !cached.playing;
+                wifiUpdateCachedStatus(cached);
+                wifiForceRepoll();
+            }
         }
         // Fortschrittsbalken: Seek
         else if (ty >= PL_PROG_Y && ty < PL_TRANS_Y && g_dDuration > 0) {
             int seekPos = (int)((long)tx * g_dDuration / DISPLAY_WIDTH);
-            if (squeezeSeek(mac, constrain(seekPos, 0, g_dDuration))) wifiForceRepoll();
+            seekPos = constrain(seekPos, 0, g_dDuration);
+            if (squeezeSeek(mac, seekPos)) {
+                SqueezieStatus cached = squeezieGetCachedStatus();
+                cached.position = seekPos;
+                wifiUpdateCachedStatus(cached);
+                wifiForceRepoll();
+            }
         }
         // Modus-Buttons
         else if (ty >= PL_MODE_Y) {
             if (tx < 240) {
                 int next = (max(0, g_dRepeat) + 1) % 3;
                 if (squeezeSetRepeat(mac, next)) {
+                    SqueezieStatus cached = squeezieGetCachedStatus();
+                    cached.repeatMode = next;
+                    wifiUpdateCachedStatus(cached);
                     g_dRepeat = next;
                     drawModeRow(g_dRepeat, g_dShuffle);
                     wifiForceRepoll();
@@ -1782,6 +1796,9 @@ void displayHandleTouch() {
             } else {
                 int next = (max(0, g_dShuffle) + 1) % 3;
                 if (squeezeSetShuffle(mac, next)) {
+                    SqueezieStatus cached = squeezieGetCachedStatus();
+                    cached.shuffleMode = next;
+                    wifiUpdateCachedStatus(cached);
                     g_dShuffle = next;
                     drawModeRow(g_dRepeat, g_dShuffle);
                     wifiForceRepoll();
@@ -1798,7 +1815,12 @@ void displayHandleTouch() {
         bool inMute     = (tx >= PL_VOL_MUTE_X  && tx <= PL_VOL_MUTE_X  + PL_VOL_BTN_W);
         bool inBar      = (tx >= bx  && tx <= bx + bw);
         if (inMute) {
-            if (!lastPressed && squeezeToggleMute(wifiGetPlayerMac())) wifiForceRepoll();
+            if (!lastPressed && squeezeToggleMute(wifiGetPlayerMac())) {
+                SqueezieStatus cached = squeezieGetCachedStatus();
+                cached.muted = !cached.muted && cached.volume > 0;
+                wifiUpdateCachedStatus(cached);
+                wifiForceRepoll();
+            }
             volHeld = false;
         } else if (g_dMuted) {
             volHeld = false;
@@ -1807,6 +1829,10 @@ void displayHandleTouch() {
             int pct = constrain((tx - bx) * 100 / bw, 0, 100);
             if (!volHeld || millis() - volHoldT0 > 80) {
                 if (squeezeSetVolume(wifiGetPlayerMac(), pct)) {
+                    SqueezieStatus cached = squeezieGetCachedStatus();
+                    cached.volume = pct;
+                    cached.muted = false;
+                    wifiUpdateCachedStatus(cached);
                     wifiForceRepoll();
                     volHeld   = true;
                     volHoldT0 = millis();
@@ -1816,6 +1842,10 @@ void displayHandleTouch() {
             if (!volHeld || millis() - volHoldT0 > 250) {
                 int nextVolume = constrain(g_dVolume + (inVolMinus ? -1 : 1), 0, 100);
                 if (squeezeSetVolume(wifiGetPlayerMac(), nextVolume)) {
+                    SqueezieStatus cached = squeezieGetCachedStatus();
+                    cached.volume = nextVolume;
+                    cached.muted = false;
+                    wifiUpdateCachedStatus(cached);
                     wifiForceRepoll();
                     volHeld   = true;
                     volHoldT0 = millis();

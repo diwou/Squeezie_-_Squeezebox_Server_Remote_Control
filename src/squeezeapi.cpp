@@ -29,7 +29,8 @@ uint16_t squeezeGetPort() { return g_port; }
 // Sendet eine JSON-RPC-Anfrage an den Lyrion-Server.
 // playerMac: "" für globale Kommandos
 // cmdJson:   Array als JSON-String, z.B. ["players",0,100]
-static bool jsonRpc(const String& playerMac, const String& cmdJson, JsonDocument& resp) {
+static bool jsonRpc(const String& playerMac, const String& cmdJson, JsonDocument& resp,
+                    uint32_t timeoutMs = 1200) {
     if (g_host.isEmpty()) return false;
     HTTPClient http;
     String url;
@@ -41,7 +42,7 @@ static bool jsonRpc(const String& playerMac, const String& cmdJson, JsonDocument
     url += "/jsonrpc.js";
     if (!http.begin(url)) return false;
     http.addHeader("Content-Type", "application/json");
-    http.setTimeout(2000);
+    http.setTimeout(timeoutMs);
     String body;
     body.reserve(playerMac.length() + cmdJson.length() + 64);
     body = "{\"id\":1,\"method\":\"slim.request\",\"params\":[\"";
@@ -201,7 +202,8 @@ bool squeezeGetStatus(const String& playerMac, SqueezieStatus& out) {
     JsonDocument resp;
     // Tags: a=artist, A=albumartist, l=album, K=artwork_url, c=coverid, d=duration, t=tracknum
     // SQUEEZE_PREFETCH+1 Einträge abrufen: [0]=aktuell, [1..N]=nächste für Prefetch
-    if (!jsonRpc(playerMac, "[\"status\",\"-\"," + String(SQUEEZE_PREFETCH + 1) + ",\"tags:aAlKcdt\"]", resp)) return false;
+    if (!jsonRpc(playerMac, "[\"status\",\"-\"," + String(SQUEEZE_PREFETCH + 1) + ",\"tags:aAlKcdt\"]",
+                 resp, 800)) return false;
     JsonObject r = resp["result"].as<JsonObject>();
     if (r.isNull()) return false;
     String mode     = r["mode"].as<String>();

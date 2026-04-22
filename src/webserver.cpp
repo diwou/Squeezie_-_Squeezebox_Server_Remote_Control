@@ -471,7 +471,7 @@ function poll(){
 }
 function c(cmd){
   fetch('/api/control',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({cmd:cmd})}).then(function(){setTimeout(poll,800);});
+    body:JSON.stringify({cmd:cmd})}).then(function(){setTimeout(poll,100);});
 }
 function pvol(v){
   if(volMuted)return;
@@ -492,7 +492,7 @@ function seek(e){
   var r=e.currentTarget.getBoundingClientRect();
   c('seek:'+(Math.round((e.clientX-r.left)/r.width*dur)));
 }
-setInterval(poll,1000);poll();
+setInterval(poll,200);poll();
 </script></body></html>
 )HTML";
 
@@ -782,18 +782,10 @@ static String statusToJson() {
     return out;
 }
 
-static void setCachedStatusVolume(int volume) {
+void wifiUpdateCachedStatus(const SqueezieStatus& status) {
     if (!g_statusMux) return;
     xSemaphoreTake(g_statusMux, portMAX_DELAY);
-    g_status.volume = constrain(volume, 0, 100);
-    g_status.muted = false;
-    xSemaphoreGive(g_statusMux);
-}
-
-static void setCachedStatusMuted(bool muted) {
-    if (!g_statusMux) return;
-    xSemaphoreTake(g_statusMux, portMAX_DELAY);
-    g_status.muted = muted && g_status.volume > 0;
+    g_status = status;
     xSemaphoreGive(g_statusMux);
 }
 
@@ -921,7 +913,11 @@ static void setupRoutes() {
                 req->send(200, "application/json", "{\"ok\":false,\"error\":\"kein Player\"}"); return;
             }
             bool ok = false;
-            if      (cmd == "toggle") { ok = status.playing ? squeezePause(mac) : squeezePlay(mac); }
+            SqueezieStatus updated = status;
+            if      (cmd == "toggle") {
+                ok = status.playing ? squeezePause(mac) : squeezePlay(mac);
+                if (ok) updated.playing = !status.playing;
+            }
             else if (cmd == "next")   ok = squeezeNext(mac);
             else if (cmd == "prev")   ok = squeezePrev(mac);
             else if (cmd == "vu") {
@@ -934,7 +930,10 @@ static void setupRoutes() {
                     for (const String& target : targets) {
                         if (squeezeSetVolume(target, nextVolume)) ok = true;
                     }
-                    if (ok) setCachedStatusVolume(nextVolume);
+                    if (ok) {
+                        updated.volume = nextVolume;
+                        updated.muted = false;
+                    }
                 }
             }
             else if (cmd == "vd") {
@@ -947,7 +946,10 @@ static void setupRoutes() {
                     for (const String& target : targets) {
                         if (squeezeSetVolume(target, nextVolume)) ok = true;
                     }
-                    if (ok) setCachedStatusVolume(nextVolume);
+                    if (ok) {
+                        updated.volume = nextVolume;
+                        updated.muted = false;
+                    }
                 }
             }
             else if (cmd == "mut") {
@@ -957,7 +959,7 @@ static void setupRoutes() {
                 for (const String& target : targets) {
                     if (squeezeSetMute(target, nextMute)) ok = true;
                 }
-                if (ok) setCachedStatusMuted(!status.muted);
+                if (ok) updated.muted = nextMute && updated.volume > 0;
             }
             else if (cmd.startsWith("vol:")) {
                 if (status.muted) {
@@ -969,12 +971,27 @@ static void setupRoutes() {
                     for (const String& target : targets) {
                         if (squeezeSetVolume(target, v)) ok = true;
                     }
-                    if (ok) setCachedStatusVolume(v);
+                    if (ok) {
+                        updated.volume = v;
+                        updated.muted = false;
+                    }
                 }
             }
-            else if (cmd == "rpt")    ok = squeezeSetRepeat (mac, (status.repeatMode  + 1) % 3);
-            else if (cmd == "shf")    ok = squeezeSetShuffle(mac, (status.shuffleMode + 1) % 3);
-            else if (cmd.startsWith("seek:")) ok = squeezeSeek(mac, cmd.substring(5).toInt());
+            else if (cmd == "rpt") {
+                int nextRepeat = (status.repeatMode + 1) % 3;
+                ok = squeezeSetRepeat(mac, nextRepeat);
+                if (ok) updated.repeatMode = nextRepeat;
+            }
+            else if (cmd == "shf") {
+                int nextShuffle = (status.shuffleMode + 1) % 3;
+                ok = squeezeSetShuffle(mac, nextShuffle);
+                if (ok) updated.shuffleMode = nextShuffle;
+            }
+            else if (cmd.startsWith("seek:")) {
+                int seekPos = cmd.substring(5).toInt();
+                ok = squeezeSeek(mac, seekPos);
+                if (ok) updated.position = seekPos;
+            }
             else {
                 req->send(400, "application/json", "{\"ok\":false,\"error\":\"unbekannter Befehl\"}");
                 return;
@@ -983,6 +1000,7 @@ static void setupRoutes() {
                 req->send(502, "application/json", "{\"ok\":false,\"error\":\"LMS-Befehl fehlgeschlagen\"}");
                 return;
             }
+            if (cmd != "next" && cmd != "prev") wifiUpdateCachedStatus(updated);
             g_forceRepoll = true;
             req->send(200, "application/json", "{\"ok\":true}");
         }
@@ -1239,7 +1257,8 @@ void webserverInit() {
             if (g_wifiState == WIFI_STATE_CONNECTED && !g_srv.playerMac.isEmpty() && !g_otaActive) {
                 if (!wifiPollNow()) srvLog("[LMS] Poll fehlgeschlagen.");
             }
-            for (int i = 0; i < 10 && !g_forceRepoll; i++) vTaskDelay(pdMS_TO_TICKS(40));
+            // Kurz schlafen, damit externe Statusänderungen schneller sichtbar werden.
+            for (int i = 0; i < 2 && !g_forceRepoll; i++) vTaskDelay(pdMS_TO_TICKS(50));
             g_forceRepoll = false;
         }
     }, "lmsPoll", 8192, nullptr, 1, nullptr, 0);

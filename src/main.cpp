@@ -102,5 +102,5 @@ void loop() {
     displayUpdatePlayer(); // Geänderte Felder des Player-Screens aktualisieren
     displayHandleTouch();  // Touch nach Display: SPI-DMA ist dann abgeschlossen
     handlePlayPauseButton();
-    delay(40);
+    delay(20);
 }

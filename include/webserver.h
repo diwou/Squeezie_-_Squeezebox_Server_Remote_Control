@@ -15,6 +15,7 @@ String          wifiGetIP();
 
 // Letzter gecachter Player-Status (für Display-Modul)
 SqueezieStatus        squeezieGetCachedStatus(); // gibt Snapshot zurück (thread-safe)
+void                  wifiUpdateCachedStatus(const SqueezieStatus& status);
 String                wifiGetPlayerMac();
 int                   wifiGetScrollSpeed(); // Scroll-Geschwindigkeit in ms/Pixel (aus NVS)
 bool                  wifiGetSyncVolume();

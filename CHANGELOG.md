@@ -4,9 +4,13 @@ Alle wichtigen Änderungen an diesem Projekt werden hier dokumentiert.
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/)
 und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang/de/).
 
-Ab jetzt sollen Codeberg-/Commit-Referenzen direkt an den einzelnen Änderungspunkten stehen,
-damit auch bei mehreren Commits am selben Tag jede Änderung eindeutig nachvollziehbar bleibt.
-Release-IDs werden nur bei echten Releases dokumentiert.
+## [0.4.4] — 2026-04-22
+
+### Behoben
+- **Bedienung reaktionsschneller gemacht**: der LMS-Statusabgleich läuft jetzt in kürzeren
+  Abständen und wartet auf Statusantworten nicht mehr so lange, sodass externe Änderungen an
+  Lautstärke, Play/Pause, Seek oder Modi schneller auf Display und Webinterface sichtbar
+  werden. [`resp-20260422`]
 
 ## [0.4.3] — 2026-04-21
 
