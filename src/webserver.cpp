@@ -50,10 +50,7 @@ static int               g_lastOtaPct  = -1;      // Throttle: Display nur bei %
 static volatile int      g_otaUiPct    = -1;      // OTA-Fortschritt, Anzeige im main loop
 static volatile bool     g_otaUiDirty  = false;   // OTA-Screen im main loop sicher neu zeichnen
 static int               g_otaError    = 0;       // letzter OTA-Fehlercode
-static int               g_pendingVol  = -1;      // Kandidat für externe Lautstärke-Sprünge
-static bool              g_pendingMute  = false;
-static uint8_t           g_pendingVolHits = 0;
-static uint32_t          g_pendingVolAt = 0;
+static uint32_t          g_lastSyncReconcile = 0; // Sync-Volumen nur in Intervallen prüfen
 
 // ─── Konfigurationsstrukturen ────────────────────────────────────────────────
 
@@ -791,9 +788,6 @@ void wifiUpdateCachedStatus(const SqueezieStatus& status) {
     xSemaphoreTake(g_statusMux, portMAX_DELAY);
     g_status = status;
     xSemaphoreGive(g_statusMux);
-    g_pendingVol = -1;
-    g_pendingVolHits = 0;
-    g_pendingVolAt = 0;
 }
 
 static void addUniqueTarget(std::vector<String>& out, const String& mac) {
@@ -814,6 +808,39 @@ static std::vector<String> volumeTargetsForPlayer(const String& mac) {
     return targets;
 }
 
+static void reconcileSyncVolume() {
+    if (!g_srv.syncVolume || g_srv.playerMac.isEmpty()) return;
+    uint32_t now = millis();
+    if (now - g_lastSyncReconcile < 350) return;
+    g_lastSyncReconcile = now;
+
+    SqueezieStatus status = squeezieGetCachedStatus();
+    std::vector<String> targets = volumeTargetsForPlayer(g_srv.playerMac);
+    if (targets.size() < 2) return;
+
+    bool mismatch = false;
+    for (const String& target : targets) {
+        int vol = -1;
+        bool muted = false;
+        if (!squeezeGetVolumeState(target, vol, muted)) continue;
+        if (vol != status.volume || muted != status.muted) {
+            mismatch = true;
+            break;
+        }
+    }
+    if (!mismatch) return;
+
+    if (status.muted) {
+        for (const String& target : targets) {
+            squeezeSetMute(target, true);
+        }
+    } else {
+        for (const String& target : targets) {
+            squeezeSetVolume(target, status.volume);
+        }
+    }
+}
+
 bool wifiPollNow() {
     if (g_wifiState != WIFI_STATE_CONNECTED || g_srv.playerMac.isEmpty() || g_otaActive) return false;
     SqueezieStatus tmp;
@@ -825,37 +852,7 @@ bool wifiPollNow() {
     g_lastLmsOkAt = millis();
     g_lmsFailStreak = 0;
     xSemaphoreTake(g_statusMux, portMAX_DELAY);
-    const int currentVolume = g_status.volume;
-    const bool currentMuted  = g_status.muted;
-    const bool volumeChanged = (tmp.volume != currentVolume) || (tmp.muted != currentMuted);
-    const bool largeVolumeJump = volumeChanged && abs(tmp.volume - currentVolume) > 1;
-    const bool pendingExpired = g_pendingVolAt != 0 && millis() - g_pendingVolAt > 600;
-    if (pendingExpired) {
-        g_pendingVol = -1;
-        g_pendingVolHits = 0;
-        g_pendingVolAt = 0;
-    }
-    if (largeVolumeJump) {
-        if (g_pendingVol == tmp.volume && g_pendingMute == tmp.muted && g_pendingVolHits > 0 && !pendingExpired) {
-            g_status = tmp;
-            g_pendingVol = -1;
-            g_pendingVolHits = 0;
-            g_pendingVolAt = 0;
-        } else {
-            g_pendingVol = tmp.volume;
-            g_pendingMute = tmp.muted;
-            g_pendingVolHits = 1;
-            g_pendingVolAt = millis();
-            tmp.volume = currentVolume;
-            tmp.muted = currentMuted;
-            g_status = tmp;
-        }
-    } else {
-        g_status = tmp;
-        g_pendingVol = -1;
-        g_pendingVolHits = 0;
-        g_pendingVolAt = 0;
-    }
+    g_status = tmp;
     xSemaphoreGive(g_statusMux);
     displayQueuePrefetch(tmp.nextCoverUrls, tmp.nextCoverKeys, tmp.nextCount);
     displayPreloadCover(tmp.coverUrl, tmp.coverKey);
@@ -1292,7 +1289,8 @@ void webserverInit() {
     xTaskCreatePinnedToCore([](void*) {
         for (;;) {
             if (g_wifiState == WIFI_STATE_CONNECTED && !g_srv.playerMac.isEmpty() && !g_otaActive) {
-                if (!wifiPollNow()) srvLog("[LMS] Poll fehlgeschlagen.");
+                if (wifiPollNow()) reconcileSyncVolume();
+                else srvLog("[LMS] Poll fehlgeschlagen.");
             }
             // Kurz schlafen, damit externe Statusänderungen schneller sichtbar werden.
             for (int i = 0; i < 2 && !g_forceRepoll; i++) vTaskDelay(pdMS_TO_TICKS(50));

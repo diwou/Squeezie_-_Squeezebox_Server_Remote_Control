@@ -15,6 +15,10 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
   die Anzeige übernommen, wenn derselbe Wert zweimal hintereinander vom LMS gemeldet wurde.
   So bleiben Zwischenstände wie 15 oder 17 bei einem Sprung auf 20 nicht mehr dauerhaft im
   Display hängen. [`vol-sync-20260422`]
+- **Sync-Player wieder hart synchronisiert**: wenn ein Player in einer Sync-Gruppe extern eine
+  Lautstärkeänderung bekommt, wird der gemeldete absolute Wert jetzt auf alle Gruppenmitglieder
+  gespiegelt. Dadurch sollen Multiroom-Player nicht mehr auseinanderlaufen, wenn ein Tool einen
+  Einzelplayer kurz vor der anderen Seite aktualisiert. [`sync-abs-20260422`]
 
 ## [0.4.3] — 2026-04-21
 

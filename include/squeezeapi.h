@@ -58,6 +58,7 @@ bool squeezeLoadPlaylist(const String& playerMac, const String& playlistId,
                          const String& playlistName = "");
 bool squeezeToggleMute(const String& playerMac);
 bool squeezeSetMute(const String& playerMac, bool mute);
+bool squeezeGetVolumeState(const String& playerMac, int& volume, bool& muted);
 
 int  squeezeVolumeFromLms(int lmsVolume); // LMS -> UI, negative Werte als Mute-Betrag
 int  squeezeVolumeToLms(int uiVolume);    // UI -> LMS, 1:1

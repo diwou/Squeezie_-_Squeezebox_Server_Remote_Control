@@ -298,6 +298,15 @@ bool squeezeSetMute(const String& mac, bool mute) {
     return jsonRpc(mac, "[\"mixer\",\"muting\",\"" + String(mute ? "1" : "0") + "\"]", d);
 }
 
+bool squeezeGetVolumeState(const String& mac, int& volume, bool& muted) {
+    JsonDocument resp;
+    if (!jsonRpc(mac, "[\"mixer\",\"volume\",\"?\"]", resp, 700)) return false;
+    int rawVolume = resp["result"]["_volume"].as<int>();
+    volume = squeezeVolumeFromLms(rawVolume);
+    muted = rawVolume < 0;
+    return true;
+}
+
 // ─── Playlists ───────────────────────────────────────────────────────────────
 
 bool squeezeGetPlaylists(std::vector<SqueeziePlaylist>& out) {
