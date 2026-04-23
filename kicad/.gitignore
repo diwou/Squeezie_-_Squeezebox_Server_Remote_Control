@@ -1,0 +1,4 @@
+# Lokale KiCad-Backups und Cache-Dateien
+Squeezie-backups/
+source/*.kicad_prl
+source/fp-info-cache

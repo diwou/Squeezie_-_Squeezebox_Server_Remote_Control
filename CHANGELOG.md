@@ -4,6 +4,21 @@ Alle wichtigen Änderungen an diesem Projekt werden hier dokumentiert.
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/)
 und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang/de/).
 
+## [0.4.5] — 2026-04-23
+
+### Hinzugefügt
+- **KiCad-Projekt Squeezie ins Repo übernommen**: das Projekt aus
+  `/projects/Elektronik/KiCad/Squeezie` liegt jetzt unter `kicad/` im
+  Repository und folgt derselben Logik wie das HUB75-Projekt: `source/` für die
+  editierbaren KiCad-Dateien und `fab/rev0.1/` für BOM, Positionsliste,
+  Designator-Liste, Netlist und das exportierte Fertigungspaket; ein eigenes
+  `README.md` im `kicad/`-Ordner beschreibt die Struktur. [`kicad-sync-20260423`]
+- **Arbeitsablauf für KiCad-Projekte dokumentiert**: die Repo-Regeln und der
+  Release-Prozess beschreiben jetzt, wie KiCad-Arbeitsstände übernommen, mit
+  Changelog-Eintrag dokumentiert und sauber nach Codeberg synchronisiert werden,
+  wenn ein Projektstand aus dem KiCad-Arbeitsverzeichnis übernommen wird.
+  [`kicad-sync-20260423`]
+
 ## [0.4.4] — 2026-04-22
 
 ### Behoben

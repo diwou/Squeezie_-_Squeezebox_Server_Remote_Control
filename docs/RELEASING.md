@@ -17,6 +17,9 @@ Diese Datei ist ebenfalls eine Vorrangregel und wird nicht frei interpretiert.
 6. Release nur mit eindeutigen Commit-/ID-Referenzen in den Notes.
 7. Keine Abkürzungen bei der Dokumentation der Release-Schritte.
 8. Wenn du an irgendeinem Punkt unsicher bist, zuerst die Regeln erneut lesen und nicht raten.
+9. Wenn ein aktueller KiCad-Stand für Squeezie vorliegt, vor dem Release
+   `kicad/` vollständig wie das HUB75-Projekt aktualisieren, also
+   `source/`, `fab/rev0.1/` und das `kicad/README.md` mitnehmen.
 
 **Faustregel:** Ein Release entsteht NICHT durch einen Commit, sondern durch
 ein Tag. Alles andere ist Vorbereitung.
@@ -114,6 +117,9 @@ npm version <NEW> --no-git-tag-version
 - Stimmen die aufgelisteten Features noch?
 - Ist die Installationsanleitung aktuell?
 - Zeigt der Versions-Badge auf die neue Version (bei statischem Link)?
+- Bei KiCad-Änderungen zusätzlich prüfen, ob der Projekt-Unterordner
+  `kicad/` vollständig gespiegelt ist und dem aktuellen Arbeitsstand
+  im externen KiCad-Verzeichnis entspricht.
 
 Änderungen ebenfalls im Changelog unter `Changed` → `docs` vermerken.
 
@@ -155,7 +161,7 @@ git push origin v<NEW>
 5. **Binärartefakte anhängen** (falls vorhanden):
    <!-- Projektspezifisch: -->
    - Firmware: `.pio/build/<board>/firmware.bin`
-   - Gerbers: `hardware/gerbers_v<NEW>.zip`
+   - KiCad-/Fertigungsdaten: `kicad/fab/rev<NEW>/<datei>`
    - etc.
 6. **Publish Release**
 
