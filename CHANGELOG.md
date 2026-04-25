@@ -4,6 +4,16 @@ Alle wichtigen Änderungen an diesem Projekt werden hier dokumentiert.
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/)
 und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang/de/).
 
+## [Unreleased]
+
+### Behoben
+- **Cover-Erholung bei hängenden Downloads stabilisiert**: wenn ein Cover-Download
+  fehlschlägt oder im Task hängen bleibt, wird der Zustand jetzt nach kurzer
+  Zeit freigegeben und der Cover-Abruf automatisch neu angestoßen, statt das
+  gesamte Cover-System bis zum manuellen Reset festzuhalten. Dadurch sollen
+  Langzeitläufer wieder Covers anzeigen, auch wenn ein einzelner Download oder
+  eine HTTP-Verbindung im Hintergrund aussteigt. [`cover-retry-20260425`]
+
 ## [0.4.5] — 2026-04-23
 
 ### Hinzugefügt

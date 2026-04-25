@@ -13,7 +13,7 @@ Diese Datei ist ebenfalls eine Vorrangregel und wird nicht frei interpretiert.
 2. `CHANGELOG.md` vor dem Release vollständig vorbereiten.
 3. Versionsstand, sichtbare Metadaten und Changelog müssen zusammenpassen.
 4. Build und Tests erst nach echten Codeänderungen erneut ausführen.
-5. Release-Tag und Codeberg-Push nur nach sauberem Arbeitsbaum.
+5. Release-Tag und Codeberg-Push gehören nach sauberem Arbeitsbaum zum Abschluss; der Codeberg-Stand soll danach dem lokalen Stand entsprechen.
 6. Release nur mit eindeutigen Commit-/ID-Referenzen in den Notes.
 7. Keine Abkürzungen bei der Dokumentation der Release-Schritte.
 8. Wenn du an irgendeinem Punkt unsicher bist, zuerst die Regeln erneut lesen und nicht raten.
@@ -200,7 +200,7 @@ git commit -m "fix(<scope>): <beschreibung>"
 
 # Changelog und Version wie oben aktualisieren,
 # Versions-Sprung ist PATCH
-# Commit, Tag, Push wie oben
+# Commit, Tag, Push wie oben, damit der veröffentlichte Stand direkt aktuell ist
 
 # Nach Abschluss: Fix nach main backporten
 git checkout main

@@ -125,8 +125,12 @@ static String            g_pendingCoverKey;
 static String            g_dispatchedCoverUrl;
 static String            g_dispatchedCoverKey;
 static String            g_loadedCoverKey;
+static volatile uint32_t g_coverRetryAt   = 0;
+static volatile uint32_t g_coverTaskStartedAt = 0;
 static TaskHandle_t      g_coverTask     = nullptr;
 static SemaphoreHandle_t g_coverMux      = nullptr;
+static constexpr uint32_t COVER_RETRY_DELAY_MS = 15000;
+static constexpr uint32_t COVER_TASK_TIMEOUT_MS = 12000;
 
 // Prefetch-Slots: Cover der nächsten Tracks (PSRAM, sequenziell geladen)
 struct PrefetchSlot {
@@ -167,6 +171,10 @@ static size_t readHttpBody(HTTPClient& http, uint8_t* buf, size_t maxLen, uint32
         }
     }
     return total;
+}
+
+static bool coverTaskTimedOut(uint32_t now, uint32_t startedAt) {
+    return startedAt != 0 && (int32_t)(now - startedAt) > (int32_t)COVER_TASK_TIMEOUT_MS;
 }
 
 // Rohwert-Lesung (ohne Kalibrierung)
@@ -917,9 +925,13 @@ static void coverDlTask(void*) {
             memcpy(g_coverBuf, g_coverDlBuf, total);
             g_coverLen = total;
             g_loadedCoverKey = pendingKey;
+            g_coverRetryAt = 0;
         } else {
             g_coverLen = 0;
             g_loadedCoverKey = "";
+            g_dispatchedCoverUrl = "";
+            g_dispatchedCoverKey = "";
+            g_coverRetryAt = millis() + COVER_RETRY_DELAY_MS;
         }
         g_coverReady = true;
         g_coverSerial++;
@@ -929,7 +941,9 @@ static void coverDlTask(void*) {
             if (f) { f.write(g_coverBuf, total); f.close(); }
         }
     }
-    g_coverTask = nullptr;
+    TaskHandle_t self = xTaskGetCurrentTaskHandle();
+    if (g_coverTask == self) g_coverTask = nullptr;
+    if (g_coverTask == nullptr) g_coverTaskStartedAt = 0;
     xSemaphoreGive(g_coverMux);
     vTaskDelete(nullptr);
 }
@@ -1061,11 +1075,26 @@ void displayQueuePrefetch(const String* urls, const String* keys, int count) {
 void displayPreloadCover(const String& url, const String& cacheKey) {
     if (url.isEmpty() || !g_coverBuf || !g_coverDlBuf) return;
     String key = cacheKey.isEmpty() ? url : cacheKey;
+    uint32_t now = millis();
     xSemaphoreTake(g_coverMux, portMAX_DELAY);
     bool coverTaskRunning = (g_coverTask != nullptr);
     bool alreadyLoaded = (g_coverLen > 0 && g_loadedCoverKey == key);
+    bool retryBlocked = (g_coverRetryAt != 0 && (int32_t)(now - g_coverRetryAt) < 0);
+    if (coverTaskRunning && coverTaskTimedOut(now, g_coverTaskStartedAt)) {
+        srvLog("[cover] Task-Timeout, erneuter Start.");
+        g_coverGen++;
+        g_coverReady = false;
+        g_coverLen = 0;
+        g_loadedCoverKey = "";
+        g_dispatchedCoverUrl = "";
+        g_dispatchedCoverKey = "";
+        g_coverRetryAt = 0;
+        g_coverTask = nullptr;
+        g_coverTaskStartedAt = 0;
+        coverTaskRunning = false;
+    }
     xSemaphoreGive(g_coverMux);
-    if (coverTaskRunning || alreadyLoaded) return; // Download läuft bereits / schon geladen
+    if (coverTaskRunning || alreadyLoaded || retryBlocked) return; // Download läuft bereits / schon geladen / wartet auf Retry
 
     xSemaphoreTake(g_coverMux, portMAX_DELAY);
     g_pendingCoverUrl    = url;
@@ -1074,6 +1103,8 @@ void displayPreloadCover(const String& url, const String& cacheKey) {
     g_coverReady         = false;
     g_coverLen           = 0;
     g_loadedCoverKey     = "";
+    g_coverRetryAt       = 0;
+    g_coverTaskStartedAt = millis();
     g_coverSerial++;
     xTaskCreatePinnedToCore(coverDlTask, "cover", 8192,
                             nullptr, 1, (TaskHandle_t*)&g_coverTask, 0);
@@ -1378,6 +1409,7 @@ void displayDrawPlayerScreen() {
     g_coverReady = false;
     g_coverLen   = 0;
     g_loadedCoverKey = "";
+    g_coverRetryAt = 0;
     xSemaphoreGive(g_coverMux);
 
     tft.fillScreen(COL_BG);
@@ -1403,6 +1435,22 @@ void displayUpdatePlayer() {
     bool alreadyDispatched = (g_dispatchedCoverUrl == g_dCoverUrl && g_dispatchedCoverKey == g_dCoverKey);
     size_t coverLen = g_coverLen;
     String loadedCoverKey = g_loadedCoverKey;
+    uint32_t coverRetryAt = g_coverRetryAt;
+    if (coverTaskRunning && coverTaskTimedOut(millis(), g_coverTaskStartedAt)) {
+        srvLog("[cover] Task-Timeout, erneuter Start.");
+        g_coverGen++;
+        g_coverReady = false;
+        g_coverLen = 0;
+        g_loadedCoverKey = "";
+        g_dispatchedCoverUrl = "";
+        g_dispatchedCoverKey = "";
+        g_coverRetryAt = 0;
+        g_coverTask = nullptr;
+        g_coverTaskStartedAt = 0;
+        coverTaskRunning = false;
+        alreadyDispatched = false;
+        coverRetryAt = 0;
+    }
     xSemaphoreGive(g_coverMux);
     if (coverReady) {
         xSemaphoreTake(g_coverMux, portMAX_DELAY);
@@ -1464,6 +1512,7 @@ void displayUpdatePlayer() {
         g_coverGen++;
         g_dispatchedCoverUrl = "";
         g_dispatchedCoverKey = "";
+        g_coverRetryAt = 0;
         if (s.coverUrl.isEmpty()) {
             g_coverReady = false;
             g_coverLen   = 0;
@@ -1487,27 +1536,31 @@ void displayUpdatePlayer() {
     coverReady = g_coverReady;
     coverLen = g_coverLen;
     loadedCoverKey = g_loadedCoverKey;
+    coverRetryAt = g_coverRetryAt;
     xSemaphoreGive(g_coverMux);
     if (!g_dCoverUrl.isEmpty() && g_coverBuf && !coverTaskRunning && !alreadyDispatched) {
-        // Bereits bereit? (Prefetch-Hit via displayPreloadCover oder Preload)
-        if (coverReady && coverLen > 0 && !g_dCoverKey.isEmpty() && loadedCoverKey == g_dCoverKey) {
-            xSemaphoreTake(g_coverMux, portMAX_DELAY);
-            g_dispatchedCoverUrl = g_dCoverUrl; // kein Download nötig
-            g_dispatchedCoverKey = g_dCoverKey;
-            xSemaphoreGive(g_coverMux);
-        } else {
-            xSemaphoreTake(g_coverMux, portMAX_DELAY);
-            g_coverReady         = false;
-            g_coverLen           = 0;
-            g_loadedCoverKey     = "";
-            g_pendingCoverUrl    = g_dCoverUrl;
-            g_pendingCoverKey    = g_dCoverKey;
-            g_dlGen              = g_coverGen;
-            g_dispatchedCoverUrl = g_dCoverUrl;
-            g_dispatchedCoverKey = g_dCoverKey;
-            xTaskCreatePinnedToCore(coverDlTask, "cover", 8192,
-                                    nullptr, 1, (TaskHandle_t*)&g_coverTask, 0);
-            xSemaphoreGive(g_coverMux);
+        if (coverRetryAt == 0 || (int32_t)(millis() - coverRetryAt) >= 0) {
+            // Bereits bereit? (Prefetch-Hit via displayPreloadCover oder Preload)
+            if (coverReady && coverLen > 0 && !g_dCoverKey.isEmpty() && loadedCoverKey == g_dCoverKey) {
+                xSemaphoreTake(g_coverMux, portMAX_DELAY);
+                g_dispatchedCoverUrl = g_dCoverUrl; // kein Download nötig
+                g_dispatchedCoverKey = g_dCoverKey;
+                xSemaphoreGive(g_coverMux);
+            } else {
+                xSemaphoreTake(g_coverMux, portMAX_DELAY);
+                g_coverReady         = false;
+                g_coverLen           = 0;
+                g_loadedCoverKey     = "";
+                g_pendingCoverUrl    = g_dCoverUrl;
+                g_pendingCoverKey    = g_dCoverKey;
+                g_dlGen              = g_coverGen;
+                g_coverTaskStartedAt = millis();
+                g_dispatchedCoverUrl = g_dCoverUrl;
+                g_dispatchedCoverKey = g_dCoverKey;
+                xTaskCreatePinnedToCore(coverDlTask, "cover", 8192,
+                                        nullptr, 1, (TaskHandle_t*)&g_coverTask, 0);
+                xSemaphoreGive(g_coverMux);
+            }
         }
     }
 

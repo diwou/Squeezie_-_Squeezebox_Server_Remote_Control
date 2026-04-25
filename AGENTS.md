@@ -19,8 +19,8 @@ Vor jeder Änderung, vor jeder Prüfung und vor jeder Antwort über den Arbeitss
 4. `npm run spell` für betroffene Text- und Markdown-Dateien ausführen.
 5. `docs/RELEASING.md` bei Release-Arbeiten immer zusätzlich beachten.
 6. Changelog-Einträge nur mit eindeutiger ID/Commit-Referenz als vollständig behandeln.
-7. Codeberg nur auf ausdrücklichen Wunsch oder klaren Sync-Hinweis des Nutzers pushen.
-8. Änderungen erst als erledigt melden, wenn Changelog, Prüfungen und Repo-Zustand zusammenpassen.
+7. Codeberg-Stand nach erfolgreichen Prüfungen aktuell halten; ein Arbeitsstand gilt erst dann als abgeschlossen, wenn der gepushte Codeberg-Stand dem lokalen Stand entspricht.
+8. Änderungen erst als erledigt melden, wenn Changelog, Prüfungen, Repo-Zustand und Codeberg-Stand zusammenpassen.
 9. Wenn eine Regel, eine Gewohnheit und eine spontane Einschätzung kollidieren, gewinnt die Regel.
 10. Wenn du diese Reihenfolge nicht sicher einhalten kannst, musst du erst die Dateien erneut lesen statt zu raten.
 
@@ -48,10 +48,8 @@ Dieses Projekt befindet sich in einer `0.x.y`-Phase und folgt inhaltlich SemVer:
 
 ### Projektregel für Datum und Build
 
-- Pro Kalendertag gibt es genau eine sichtbare Versionsnummer.
-- Alle Änderungen desselben Tages werden unter derselben Versionsnummer gesammelt.
-- Nicht-major Änderungen am selben Tag erhöhen die Versionsnummer nicht erneut.
-- Development-Stände tragen in sichtbaren Metadaten immer den aktuellen Codeberg-Kurz-Hash als Suffix, z. B. `0.4.3+5e0e372`.
+- Development-Stände behalten die zuletzt freigegebene Versionsbasis und tragen in sichtbaren Metadaten immer den aktuellen Codeberg-Kurz-Hash als Suffix, z. B. `0.4.5+5e0e372`.
+- Die sichtbare Basis-Version wird erst bei einem neuen Release angehoben, nicht pro Kalendertag.
 - Production-Releases tragen nur die reine Version ohne Hash-Suffix.
 - Die Versions-Herkunft liegt in `include/config.h` über `APP_VERSION_BASE`; `include/version_generated.h` wird beim Build erzeugt und darf nicht manuell gepflegt werden.
 
@@ -113,12 +111,12 @@ Dieses Projekt befindet sich in einer `0.x.y`-Phase und folgt inhaltlich SemVer:
 - Nach Codeänderungen lokal prüfen mit `pio run` und anschließend `npm run spell`, sofern Textdateien oder sichtbare Metadaten betroffen sind.
 - Nach reinen Doku-, Regel- oder Metadatenänderungen nur die passenden Textprüfungen laufen lassen, nicht automatisch `pio run`.
 - Erst nach erfolgreicher Prüfung und sauberem `git status` gilt eine Änderung als abgeschlossen.
-- Codeberg-Uploads oder `git push origin main` nur ausführen, wenn der Nutzer das ausdrücklich will oder klar auf Synchronisierung gepocht hat.
+- Codeberg-Uploads und `git push origin main` gehören nach erfolgreichen Prüfungen zum Abschluss eines Arbeitsstands, damit der Codeberg-Stand aktuell bleibt.
 - Wenn KiCad-Dateien übernommen wurden, den neuen Stand im `kicad/`-Unterordner
   als vollständigen Projektspiegel pflegen, den Changelog mitführen und den
   Arbeitsbaum erst dann als erledigt behandeln, wenn die Übernahme sauber
   committed und auf Codeberg synchronisiert ist.
-- Keine Zwischenstände als erledigt melden, solange lokale Prüfung, Changelog und Repo-Zustand nicht zusammenpassen.
+- Keine Zwischenstände als erledigt melden, solange lokale Prüfung, Changelog, Repo-Zustand und Codeberg-Stand nicht zusammenpassen.
 
 ## 9. Nachvollziehbarkeit
 
