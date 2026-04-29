@@ -15,8 +15,16 @@
 
 // --- Pins ---
 #define PIN_TFT_BL      7   // Hintergrundbeleuchtung (HIGH = an)
+#define PIN_TFT_CS      10  // Display Chip-Select
+#define PIN_TFT_DC      9   // Display Data/Command
+#define PIN_TFT_RST     8   // Display Reset
+#define PIN_TFT_MOSI    11  // Display MOSI (SPI)
+#define PIN_TFT_SCLK    12  // Display SCK (SPI)
 #define PIN_TOUCH_CS    4   // Touch Chip-Select (TCS)
 #define PIN_TOUCH_IRQ   5   // Touch-Interrupt (PEN, LOW = berührt, nicht angeschlossen)
+#define PIN_TOUCH_MOSI  13  // Touch MOSI (SPI, shared MISO mit Display)
+#define PIN_TOUCH_MISO  13  // Touch MISO (SPI, shared mit MOSI da ILI9488 MISO nicht tristatet)
+#define PIN_TOUCH_SCLK  12  // Touch SCK (SPI, shared mit Display)
 #define PIN_BOOT_BTN    0   // Eingebauter BOOT-Button (LOW = gedrückt)
 #define PIN_PLAY_BTN    1   // Externer Play/Pause-Taster (LOW = gedrückt)
 
@@ -63,3 +71,7 @@
 #define WIFI_AP_SSID             "Squeezie-Setup"
 #define WIFI_CONNECT_TIMEOUT_MS  8000
 #define LYRION_DEFAULT_PORT      9000
+
+// --- OTA / Sicherheit ---
+#define OTA_HOSTNAME             "squeezie"
+#define OTA_PASSWORD             "squeezie"

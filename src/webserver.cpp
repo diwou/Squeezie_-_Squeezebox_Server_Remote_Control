@@ -1255,7 +1255,8 @@ void webserverInit() {
         if (!connectWiFi(4000)) startAP();
     }
     if (g_wifiState == WIFI_STATE_CONNECTED) {
-        ArduinoOTA.setHostname("squeezie");
+        ArduinoOTA.setHostname(OTA_HOSTNAME);
+        ArduinoOTA.setPassword(OTA_PASSWORD);
         ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
             g_otaActive = true;
             if (total > 0) {

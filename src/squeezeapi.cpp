@@ -244,6 +244,11 @@ bool squeezeGetStatus(const String& playerMac, SqueezieStatus& out) {
     return true;
 }
 
+// ─── Volume-Konvertierung ─────────────────────────────────────────────────────
+// LMS liefert Volume als int (0–100), gelegentlich auch negative Werte bei
+// JSON-Parsing-Fehlern. Der abs()-Aufruf unten fängt negative Werte ab, damit
+// keine negativen Lautstärken im UI landen. Die Konvertierung ist ansonsten 1:1.
+
 // ─── Steuerkommandos ─────────────────────────────────────────────────────────
 
 bool squeezePlay(const String& mac)  { JsonDocument d; return jsonRpc(mac, "[\"play\"]", d); }

@@ -1,67 +1,170 @@
 #pragma once
+/**
+ * @file squeezeapi.h
+ * @brief Lyrion/Squeezebox JSON-RPC-API – Kommunikation mit dem LMS-Server
+ *
+ * Stellt Funktionen zur Steuerung eines Lyrion (ehemals Logitech Media Server)
+ * bereit. Die Kommunikation erfolgt per HTTP-POST an die JSON-RPC-Schnittstelle
+ * des Servers. Zusätzlich wird eine UDP-basierte Server-Discovery unterstützt.
+ *
+ * @note Alle Netzwerkfunktionen sind blockierend; Timeouts sind in den
+ *       Implementierungen konfiguriert (Standard 1200 ms, Status 800 ms).
+ */
+
 #include <Arduino.h>
 #include <vector>
 
-#define SQUEEZE_PREFETCH 4   // Anzahl vorauszuladender Cover-Slots
+/// Anzahl der vorauszuladenden Cover-Slots für das Prefetch-System
+#define SQUEEZE_PREFETCH 4
 
+/**
+ * @struct SqueeziePlayer
+ * @brief Repräsentiert einen Squeezebox-Player im Netzwerk.
+ */
 struct SqueeziePlayer {
-    String mac;
-    String name;
-    bool   connected;
+    String mac;        ///< MAC-Adresse des Players (z. B. "aa:bb:cc:dd:ee:ff")
+    String name;       ///< Anzeigename des Players
+    bool   connected;  ///< true wenn der Player mit dem LMS verbunden ist
 };
 
+/**
+ * @struct SqueeziePlaylist
+ * @brief Repräsentiert eine Playlist auf dem LMS-Server.
+ */
 struct SqueeziePlaylist {
-    String id;
-    String name;
-    int    trackCount = 0;
+    String id;           ///< LMS-interne ID der Playlist
+    String name;         ///< Anzeigename der Playlist
+    int    trackCount;   ///< Anzahl der Titel in der Playlist
 };
 
+/**
+ * @struct SqueezieStatus
+ * @brief Gecachter Status eines Players (wird periodisch vom LMS abgefragt).
+ */
 struct SqueezieStatus {
-    bool   playing     = false;
-    String title;
-    String artist;
-    String album;
-    int    trackNum    = 0;
-    String coverUrl;           // Cover-URL des aktuellen Titels
-    String coverKey;           // Stabiler Track-Key fuer den sichtbaren Cover-Download
-    int    duration    = 0;
-    int    position    = 0;
-    int    volume      = 0;
-    bool   muted       = false;
-    int    repeatMode  = 0;   // 0=aus, 1=Titel, 2=Playlist
-    int    shuffleMode = 0;   // 0=aus, 1=Titel, 2=Album
-    String playerName;
-    String nextCoverUrls[SQUEEZE_PREFETCH]; // Cover-URLs der nächsten Tracks
-    String nextCoverKeys[SQUEEZE_PREFETCH]; // LMS-coverid der nächsten Tracks
-    int    nextCount   = 0;
+    bool   playing     = false;  ///< true wenn Wiedergabe läuft
+    String title;                 ///< Aktueller Titelname
+    String artist;                ///< Interpret
+    String album;                 ///< Albumname
+    int    trackNum    = 0;       ///< Titelnummer im aktuellen Album
+    String coverUrl;              ///< Vollständige HTTP-URL zum Cover-JPEG
+    String coverKey;              ///< Stabiler Track-Key für Cover-Download (verhindert unnötige Neuladung)
+    int    duration    = 0;       ///< Gesamtdauer in Sekunden
+    int    position    = 0;       ///< Aktuelle Position in Sekunden
+    int    volume      = 0;       ///< Lautstärke 0–100
+    bool   muted       = false;   ///< true wenn stummgeschaltet
+    int    repeatMode  = 0;       ///< 0=aus, 1=Titel, 2=Playlist
+    int    shuffleMode = 0;       ///< 0=aus, 1=Titel, 2=Album
+    String playerName;            ///< Anzeigename des aktuellen Players
+    String nextCoverUrls[SQUEEZE_PREFETCH]; ///< Cover-URLs der nächsten Tracks für Prefetch
+    String nextCoverKeys[SQUEEZE_PREFETCH]; ///< LMS-coverid der nächsten Tracks für Prefetch
+    int    nextCount   = 0;       ///< Anzahl gültiger Einträge in nextCoverUrls/Keys
 };
 
+/**
+ * @brief Setzt die Server-Adresse und speichert sie (NVS).
+ * @param host Hostname oder IP-Adresse des LMS.
+ * @param port Port des LMS (Standard 9000).
+ */
 void     squeezeSetServer(const String& host, uint16_t port);
+
+/// @brief Gibt die aktuell konfigurierte LMS-Hostadresse zurück.
 String   squeezeGetHost();
+
+/// @brief Gibt den aktuell konfigurierten LMS-Port zurück.
 uint16_t squeezeGetPort();
 
+/**
+ * @brief Ruft die Liste aller bekannten Player vom LMS ab.
+ * @param[out] out Vektor mit SqueeziePlayer-Strukturen.
+ * @return true bei Erfolg, false bei Fehler.
+ */
 bool squeezeGetPlayers(std::vector<SqueeziePlayer>& out);
+
+/**
+ * @brief Ruft die Playlist-Liste vom LMS ab.
+ * @param[out] out Vektor mit SqueeziePlaylist-Strukturen.
+ * @return true bei Erfolg, false bei Fehler.
+ */
 bool squeezeGetPlaylists(std::vector<SqueeziePlaylist>& out);
+
+/**
+ * @brief Ruft den vollständigen Player-Status inkl. Cover-URLs ab.
+ * @param playerMac MAC-Adresse des Players.
+ * @param[out] out  Ausführlicher Status (Titel, Cover, Position, Volume, Modi).
+ * @return true bei Erfolg, false bei Fehler.
+ */
 bool squeezeGetStatus(const String& playerMac, SqueezieStatus& out);
+
+/**
+ * @brief Ermittelt alle Mitglieder einer Sync-Gruppe.
+ * @param playerMac MAC-Adresse eines Gruppenmitglieds.
+ * @param[out] out  Vektor mit MAC-Adressen aller Gruppenmitglieder.
+ * @return true wenn mindestens ein weiteres Mitglied gefunden wurde.
+ */
 bool squeezeGetSyncGroupMembers(const String& playerMac, std::vector<String>& out);
 
-bool squeezePlay(const String& playerMac);
-bool squeezePause(const String& playerMac);
-bool squeezeNext(const String& playerMac);
-bool squeezePrev(const String& playerMac);
-bool squeezeSeek(const String& playerMac, int seconds);
-bool squeezeSetVolume(const String& playerMac, int volume);       // absolut 0-100, LMS-direkt
-bool squeezeAdjustVolume(const String& playerMac, int delta);     // relativ (+1, -5, …)
-bool squeezeSetRepeat(const String& playerMac, int mode);
-bool squeezeSetShuffle(const String& playerMac, int mode);
+// ─── Transport-Kommandos ─────────────────────────────────────────────────────
+
+bool squeezePlay(const String& playerMac);       ///< Wiedergabe starten
+bool squeezePause(const String& playerMac);      ///< Wiedergabe pausieren
+bool squeezeNext(const String& playerMac);       ///< Nächster Titel
+bool squeezePrev(const String& playerMac);       ///< Vorheriger Titel
+bool squeezeSeek(const String& playerMac, int seconds); ///< An Position springen
+
+// ─── Lautstärke ──────────────────────────────────────────────────────────────
+
+bool squeezeSetVolume(const String& playerMac, int volume);       ///< Absolut 0–100
+bool squeezeAdjustVolume(const String& playerMac, int delta);     ///< Relativ (+1, -5, …)
+bool squeezeToggleMute(const String& playerMac);                  ///< Stummschaltung umschalten
+bool squeezeSetMute(const String& playerMac, bool mute);          ///< Stummschaltung setzen
+bool squeezeGetVolumeState(const String& playerMac, int& volume, bool& muted); ///< Aktuelle Lautstärke abfragen
+
+// ─── Wiedergabemodi ──────────────────────────────────────────────────────────
+
+bool squeezeSetRepeat(const String& playerMac, int mode);  ///< 0=aus, 1=Titel, 2=Playlist
+bool squeezeSetShuffle(const String& playerMac, int mode); ///< 0=aus, 1=Titel, 2=Album
+
+// ─── Playlists ───────────────────────────────────────────────────────────────
+
+/**
+ * @brief Lädt eine Playlist auf dem Player.
+ * @param playerMac   MAC-Adresse des Players.
+ * @param playlistId  LMS-interne ID der Playlist.
+ * @param playlistName Optionaler Anzeigename (wird nicht an LMS gesendet).
+ * @return true bei Erfolg.
+ */
 bool squeezeLoadPlaylist(const String& playerMac, const String& playlistId,
                          const String& playlistName = "");
-bool squeezeToggleMute(const String& playerMac);
-bool squeezeSetMute(const String& playerMac, bool mute);
-bool squeezeGetVolumeState(const String& playerMac, int& volume, bool& muted);
 
-int  squeezeVolumeFromLms(int lmsVolume); // LMS -> UI, negative Werte als Mute-Betrag
-int  squeezeVolumeToLms(int uiVolume);    // UI -> LMS, 1:1
+// ─── Volume-Konvertierung ────────────────────────────────────────────────────
 
-// UDP-Discovery: sucht Lyrion-Server im Netz (blockierend bis timeoutMs)
+/**
+ * @brief Konvertiert LMS-Volume ins UI-Format (0–100).
+ * @param lmsVolume Rohwert vom LMS (kann negativ sein bei Mute).
+ * @return Positiver UI-Volume-Wert (abs() für negative Werte).
+ */
+int  squeezeVolumeFromLms(int lmsVolume);
+
+/**
+ * @brief Konvertiert UI-Volume ins LMS-Format (1:1).
+ * @param uiVolume UI-Volume 0–100.
+ * @return Gleicher Wert für LMS.
+ */
+int  squeezeVolumeToLms(int uiVolume);
+
+// ─── Server-Discovery ────────────────────────────────────────────────────────
+
+/**
+ * @brief Sucht einen Lyrion-Server im lokalen Netzwerk.
+ *
+ * Führt zuerst einen UDP-Broadcast auf Port 3483 (Slim-Protokoll) durch.
+ * Falls keine Antwort innerhalb von 1500 ms, folgt ein TCP-Portscan auf
+ * typischen Server-IPs (.1, .2, .100–.105, .200–.202, .254).
+ *
+ * @param[out] foundHost Gefundene IP-Adresse des Servers.
+ * @param[out] foundPort Gefundener Port (Standard 9000).
+ * @param timeoutMs Maximale Suchdauer in ms (Standard 3000).
+ * @return true wenn ein Server gefunden wurde.
+ */
 bool squeezeDiscover(String& foundHost, uint16_t& foundPort, uint32_t timeoutMs = 3000);

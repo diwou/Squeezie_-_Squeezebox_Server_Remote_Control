@@ -2,6 +2,7 @@
 #include "config.h"
 #include "display.h"
 #include "webserver.h"
+#include "esp_task_wdt.h"
 
 static void handlePlayPauseButton() {
     static bool     lastRawState      = HIGH;
@@ -46,6 +47,11 @@ static void handlePlayPauseButton() {
 void setup() {
     pinMode(PIN_BOOT_BTN, INPUT_PULLUP);
     pinMode(PIN_PLAY_BTN, INPUT_PULLUP);
+
+    // ── HW-Watchdog: 10 s Timeout ─────────────────────────────────────────────
+    // Falls ein FreeRTOS-Task hängt (z.B. Cover-Download), startet das Gerät
+    // nach 10 s automatisch neu, statt dauerhaft zu blockieren.
+    esp_task_wdt_init(10, true);
 
     displayInit();                         // Display + ggf. Touch-Kalibrierung
     displayShowStartup("v" APP_VERSION, ""); // Startup-Screen sofort anzeigen

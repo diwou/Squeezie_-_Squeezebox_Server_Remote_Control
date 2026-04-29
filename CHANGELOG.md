@@ -6,6 +6,17 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 
 ## [Unreleased]
 
+### Geändert
+- **Code-Review-Punkte umgesetzt**: diverse Verbesserungen aus dem systematischen
+  Code-Review – siehe Einzelauflistung unten. [`code-review-20260429`]
+
+### Hinzugefügt
+- **HW-Watchdog aktiviert**: `esp_task_wdt_init()` in `setup()` initialisiert
+  den Watchdog, sodass das Gerät bei Task-Hängern automatisch neu startet.
+  [`code-review-20260429`]
+- **Doxygen-Kommentare zu allen öffentlichen API-Funktionen** in den Headern
+  ergänzt. [`code-review-20260429`]
+
 ### Behoben
 - **Cover-Erholung bei hängenden Downloads stabilisiert**: wenn ein Cover-Download
   fehlschlägt oder im Task hängen bleibt, wird der Zustand jetzt nach kurzer
@@ -13,6 +24,46 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
   gesamte Cover-System bis zum manuellen Reset festzuhalten. Dadurch sollen
   Langzeitläufer wieder Covers anzeigen, auch wenn ein einzelner Download oder
   eine HTTP-Verbindung im Hintergrund aussteigt. [`cover-retry-20260425`]
+- **`abs()`-Aufruf in `squeezeVolumeFromLms()` dokumentiert**: die Funktion
+  wandelt LMS-Volumen (0–100) ins UI-Format um; der `abs()`-Aufruf behandelt
+  negative Werte, die bei JSON-Parsing-Fehlern auftreten können.
+  [`code-review-20260429`]
+- **`String`-Parameter auf `const String&` umgestellt**: in `squeezeapi.cpp`
+  und `webserver.cpp` werden String-Parameter jetzt durchgängig als
+  konstante Referenz übergeben, um Kopien zu vermeiden.
+  [`code-review-20260429`]
+- **Display-Dimensionen durch `DISPLAY_WIDTH`/`DISPLAY_HEIGHT` ersetzt**:
+  hartcodierte 480/320-Werte in `display.cpp` durch die Defines aus
+  `config.h` ausgetauscht. [`code-review-20260429`]
+- **Leere Platzhalter-Readmes entfernt**: `include/README`, `lib/README` und
+  `test/README` waren ohne Inhalt und wurden gelöscht.
+  [`code-review-20260429`]
+- **Kommentar zu `LovyanGFX@1.1.12`-Pinning in `platformio.ini` ergänzt**:
+  erklärt, warum die Version festgepinnt ist (SPI-Regression in 1.2.x).
+  [`code-review-20260429`]
+- **`display.cpp` aufgeteilt**: die über 1900 Zeilen große Datei wurde in
+  vier Module aufgeteilt: `display_draw.cpp` (Zeichenroutinen),
+  `display_touch.cpp` (Touch + Kalibrierung), `display_cover.cpp`
+  (Cover-Download + Prefetch + Cache) und `display_screens.cpp`
+  (Screen-Management). [`code-review-20260429`]
+- **`generate_compiledb.py`-Implementierung bestätigt**: die Datei enthielt
+  bereits eine funktionierende Implementierung (kein `pass`), der
+  Code-Review-Befund war veraltet. [`code-review-20260429`]
+- **OTA-Passwortschutz aktiviert**: `ArduinoOTA.setPassword()` in
+  `webserver.cpp` setzt das konfigurierbare Passwort aus `config.h`
+  (`OTA_PASSWORD`), sodass OTA-Updates nicht mehr ohne Authentifizierung
+  möglich sind. [`code-review-20260429`]
+- **OTA-Konfiguration in `config.h` zentralisiert**: `OTA_HOSTNAME` und
+  `OTA_PASSWORD` sind jetzt als Defines in `config.h` hinterlegt und
+  können dort angepasst werden. [`code-review-20260429`]
+
+### Behoben
+- **NVS-Kalibrierungsdaten nicht gefunden**: `displayInit()` in
+  `display_screens.cpp` verwendete den falschen NVS-Namespace (`"touch"`)
+  und Literal-Schlüssel (`"cal_x0"` etc.) statt der Defines aus `config.h`
+  (`NVS_NAMESPACE` = `"squeezie"`, `NVS_KEY_CAL_X0` etc.). Dadurch wurden
+  gespeicherte Kalibrierungsdaten nicht gefunden und die Kalibrierung bei
+  jedem Start erneut gestartet. [`code-review-20260429`]
 
 ## [0.4.5] — 2026-04-23
 
