@@ -56,8 +56,6 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 - **OTA-Konfiguration in `config.h` zentralisiert**: `OTA_HOSTNAME` und
   `OTA_PASSWORD` sind jetzt als Defines in `config.h` hinterlegt und
   können dort angepasst werden. [`code-review-20260429`]
-
-### Behoben
 - **NVS-Kalibrierungsdaten nicht gefunden**: `displayInit()` in
   `display_screens.cpp` verwendete den falschen NVS-Namespace (`"touch"`)
   und Literal-Schlüssel (`"cal_x0"` etc.) statt der Defines aus `config.h`
@@ -73,6 +71,36 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
   zu Beginn jeder `loop()`-Iteration sowie `esp_task_wdt_reset()` während des
   HTTP-Reads in `readHttpBody()` und nach dem HTTP-Download in `coverDlTask()`.
   [`watchdog-bootloop-20260429`]
+- **Titel-/Artist-/Album-Anzeige in `displayUpdatePlayer()` ergänzt**: nach der
+  Aufteilung von `display.cpp` fehlte in `display_screens.cpp` der gesamte Block
+  zum Zeichnen von Titel (bold, Font 3, weiss), Artist (Font 2, grün) und Album
+  (Font 2, hellgrau) inklusive Scroll-Logik (fraktionaler Akkumulator),
+  Textbreiten-Caching und Track-Info-Zeile. [`5449dcd`]
+- **Uhrzeit aus separater Bottom-Zeile entfernt**: nach der Refaktorierung wurde
+  die Uhrzeit zusätzlich als `drawInfoLine()` bei `y=306` (schwarzer Balken unten)
+  angezeigt, statt wie zuvor im Header. Jetzt wird die Uhrzeit wieder zentriert im
+  `drawPlayerHeader()`-Bereich aktualisiert. [`5449dcd`]
+- **Cover-Download-Task-Handle zerstört nach erstem Download**: `coverDlTask()`
+  setzte `g_coverTask = nullptr` (Zeile 166), was dazu führte, dass
+  `displayPreloadCover()` keine Notification mehr an den Task senden konnte
+  (`if (task)` schlug fehl). Dadurch wurden nach dem ersten Song keine Cover
+  mehr geladen. Behoben durch Entfernen der Nullsetzung – die Task läuft in
+  einer Endlosschleife und das Handle muss für zukünftige Notifications erhalten
+  bleiben. [`5449dcd`]
+- **Watchdog-Timeout in Cover-Download- und Prefetch-Task behoben**:
+  `coverDlTask()` und `prefetchTask()` verwendeten `ulTaskNotifyTake(pdTRUE,
+  portMAX_DELAY)` zusammen mit `esp_task_wdt_add()`. Da blockierte Tasks den
+  Watchdog-Timer nicht anhalten, führte dies nach 10 s Inaktivität (keine neuen
+  Cover-Notifications) zu einem Watchdog-Reset. Behoben durch Umstellung auf
+  `ulTaskNotifyTake(..., pdMS_TO_TICKS(2000))` – der Task erwacht alle 2 s und
+  füttert den Watchdog. Zusätzlich wurde `esp_task_wdt_reset()` vor den
+  HTTP-Operationen `http.begin()` und `http.GET()` ergänzt, die ohne Feeding
+  ebenfalls den Watchdog auslösen konnten. [`5449dcd`]
+- **Automatischer Retry für fehlgeschlagene Cover-Downloads**: `coverDlTask()`
+  prüft jetzt nach jedem Timeout (2 s), ob ein fehlgeschlagener Download zur
+  Wiederholung ansteht (`g_coverRetryAt`). Nach `COVER_RETRY_DELAY_MS` (15 s)
+  wird der fehlgeschlagene Download automatisch neu gestartet, ohne dass der
+  gesamte Task neu erzeugt werden muss. [`5449dcd`]
 
 ## [0.4.5] — 2026-04-23
 

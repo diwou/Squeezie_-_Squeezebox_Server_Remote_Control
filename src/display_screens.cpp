@@ -84,17 +84,83 @@ void displayUpdatePlayer() {
         drawPlayerHeader(g_dPlayer.c_str(), st.playing);
     }
 
-    // ── Titel / Artist / Album ───────────────────────────────────────────
-    bool metaChanged = false;
-    if (st.title  != g_dTitle)  { g_dTitle  = st.title;  metaChanged = true; }
-    if (st.artist != g_dArtist) { g_dArtist = st.artist; metaChanged = true; }
-    if (st.album  != g_dAlbum)  { g_dAlbum  = st.album;  metaChanged = true; }
+    // ── Uhrzeit im Header minütlich aktualisieren ────────────────────────
+    {
+        time_t tnow = time(nullptr);
+        struct tm ti; localtime_r(&tnow, &ti);
+        if (ti.tm_year > 100 && ti.tm_min != g_lastClockMin) {
+            g_lastClockMin = ti.tm_min;
+            char tbuf[6];
+            snprintf(tbuf, sizeof(tbuf), "%02d:%02d", ti.tm_hour, ti.tm_min);
+            tft.setFont(nullptr); tft.setTextSize(2);
+            tft.setTextDatum(MC_DATUM);
+            tft.setTextColor(COL_MGREY, COL_HDR);
+            tft.drawString(tbuf, DISPLAY_WIDTH / 2, PL_HDR_H / 2);
+        }
+    }
 
+    // ── Titel / Artist / Album (mit Scroll-Logik) ────────────────────────
+    bool metaChanged = (st.title != g_dTitle || st.artist != g_dArtist || st.album != g_dAlbum);
     if (metaChanged) {
-        // Info-Bereich löschen
-        tft.fillRect(PL_INFO_X, PL_INFO_Y, PL_INFO_W, PL_COVER_H, COL_BG);
+        // Info-Bereich löschen (116px Höhe für Titel/Artist/Album + Track-Zeile)
+        tft.fillRect(PL_INFO_X, PL_INFO_Y, PL_INFO_W, 116, COL_BG);
         // Cover-Platzhalter (falls kein Cover geladen)
         drawCoverPlaceholder();
+        // Scroll-Offsets bei Titelwechsel zurücksetzen
+        g_scrollOff[0] = g_scrollOff[1] = g_scrollOff[2] = 0;
+        g_scrollLast = millis();
+        g_dTitle  = st.title;
+        g_dArtist = st.artist;
+        g_dAlbum  = st.album;
+        g_dTitleD = st.title;
+        g_dArtistD = st.artist;
+        g_dAlbumD  = st.album;
+    }
+
+    // Textbreiten cachen — nur bei Titelwechsel neu messen
+    static int s_tw0 = 0, s_tw1 = 0, s_tw2 = 0;
+    if (metaChanged) {
+        setPlayerInfoFont(3); s_tw0 = tft.textWidth(g_dTitleD.c_str());
+        setPlayerInfoFont(2); s_tw1 = tft.textWidth(g_dArtistD.c_str());
+                             s_tw2 = tft.textWidth(g_dAlbumD.c_str());
+    }
+
+    // Scroll-Tick: Fraktionaler Akkumulator
+    uint32_t now = millis();
+    int scrollMs = wifiGetScrollSpeed();
+    if (scrollMs < 1) scrollMs = 1;
+    static uint32_t s_scrollAccum = 0;
+    s_scrollAccum += (now - g_scrollLast);
+    g_scrollLast = now;
+    int tickPx = (int)(s_scrollAccum / (uint32_t)scrollMs);
+    if (tickPx > 0) s_scrollAccum -= (uint32_t)tickPx * (uint32_t)scrollMs;
+    if (metaChanged) s_scrollAccum = 0;
+    bool doScroll = (tickPx > 0);
+
+    // Welche Zeilen scrollen tatsächlich?
+    bool l0 = (s_tw0 + 4 > PL_INFO_W);
+    bool l1 = (s_tw1 + 4 > PL_INFO_W);
+    bool l2 = (s_tw2 + 4 > PL_INFO_W);
+
+    if (doScroll) {
+        if (l0) { g_scrollOff[0] += tickPx; if (g_scrollOff[0] > s_tw0 + 30) g_scrollOff[0] = 0; }
+        if (l1) { g_scrollOff[1] += tickPx; if (g_scrollOff[1] > s_tw1 + 30) g_scrollOff[1] = 0; }
+        if (l2) { g_scrollOff[2] += tickPx; if (g_scrollOff[2] > s_tw2 + 30) g_scrollOff[2] = 0; }
+    }
+
+    // Nicht-scrollende Zeilen nur bei Inhaltswechsel zeichnen → kein Flackern
+    if (metaChanged || (doScroll && l0)) drawPlayerScrollLine(g_dTitleD.c_str(),  PL_INFO_X, PL_INFO_Y + 2,  PL_INFO_W, COL_WHITE, 3, g_scrollOff[0], true);
+    if (metaChanged || (doScroll && l1)) drawPlayerScrollLine(g_dArtistD.c_str(), PL_INFO_X, PL_INFO_Y + 34, PL_INFO_W, COL_GREEN, 2, g_scrollOff[1]);
+    if (metaChanged || (doScroll && l2)) drawPlayerScrollLine(g_dAlbumD.c_str(),  PL_INFO_X, PL_INFO_Y + 58, PL_INFO_W, COL_LGREY, 2, g_scrollOff[2]);
+
+    // Track-Info-Zeile (Track-Nummer + Dauer)
+    if (metaChanged || st.duration != g_dDuration || st.trackNum != g_dTrackNum) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "Track %d  |  %d:%02d",
+                 st.trackNum, st.duration / 60, st.duration % 60);
+        drawInfoLine(buf, PL_INFO_X, PL_INFO_Y + 92, PL_INFO_W, COL_MGREY, 2);
+        g_dDuration = st.duration;
+        g_dTrackNum = st.trackNum;
     }
 
     // ── Cover ────────────────────────────────────────────────────────────
@@ -135,8 +201,17 @@ void displayUpdatePlayer() {
     }
 
     // ── Progress ─────────────────────────────────────────────────────────
-    if (st.position != g_dPosition || st.duration != g_dDuration) {
-        g_dPosition = st.position;
+    if (st.position != g_lmsPos) {
+        g_lmsPos     = st.position;
+        g_localPos   = st.position;
+        g_localPosMs = millis();
+    }
+    // Interpolierte Position für die Anzeige
+    int elapsed = (int)((millis() - g_localPosMs) / 1000);
+    int displayPos = g_localPos + elapsed;
+    if (displayPos < 0) displayPos = 0;
+    if (displayPos != g_dPosition || st.duration != g_dDuration) {
+        g_dPosition = displayPos;
         g_dDuration = st.duration;
         drawProgressBar(g_dPosition, g_dDuration);
     }
@@ -151,25 +226,6 @@ void displayUpdatePlayer() {
     // ── Repeat / Shuffle ─────────────────────────────────────────────────
     if (st.repeatMode  != g_dRepeat)  { g_dRepeat  = st.repeatMode;  drawModeRow(g_dRepeat, g_dShuffle); }
     if (st.shuffleMode != g_dShuffle) { g_dShuffle = st.shuffleMode; drawModeRow(g_dRepeat, g_dShuffle); }
-
-    // ── Info-Zeile (Uhrzeit) ─────────────────────────────────────────────
-    time_t now = time(nullptr);
-    struct tm* ti = localtime(&now);
-    if (ti && ti->tm_min != g_lastClockMin) {
-        g_lastClockMin = ti->tm_min;
-        char buf[32];
-        strftime(buf, sizeof(buf), "%H:%M", ti);
-        drawInfoLine(buf, 0, DISPLAY_HEIGHT - 14, DISPLAY_WIDTH, COL_DGREY, 1);
-    }
-
-    // ── Scroll-Animation ─────────────────────────────────────────────────
-    // Wird in loop() über g_scrollOff gesteuert – hier nur die Anzeige
-    if (metaChanged) {
-        // Scroll-Offsets zurücksetzen
-        g_scrollOff[0] = 0;
-        g_scrollOff[1] = 0;
-        g_scrollOff[2] = 0;
-    }
 }
 
 // ─── OTA-Screen ───────────────────────────────────────────────────────────

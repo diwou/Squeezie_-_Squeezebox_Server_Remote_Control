@@ -38,6 +38,8 @@
     "Beruehrung",
     "blockierender",
     "bmut",
+    "Bootloop",
+    "bootloop",
     "bootloader",
     "bus_shared",
     "Bus_SPI",
@@ -511,7 +513,12 @@
     "Zielpunkt",
     "Zielpunkte",
     "Zifferblöcken",
-    "Zifferpaaren"
+    "Zifferpaaren",
+    "feeden",
+    "feedeten",
+    "gefeedet",
+    "nullptr",
+    "Refaktorierung"
   ],
   "ignorePaths": [
     ".pio/**",

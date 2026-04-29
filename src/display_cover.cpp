@@ -85,20 +85,41 @@ void coverDlTask(void* p) {
     esp_task_wdt_add(nullptr);
 
     for (;;) {
-        // Warte auf Arbeit (kein Timeout – wird per xTaskNotifyGive geweckt)
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        // Mit 2s-Timeout warten, damit Watchdog regelmässig gefüttert wird
+        // und Retry- oder Timeout-Prüfungen möglich sind.
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(2000));
+        esp_task_wdt_reset();
 
-        // ── Auftrag aus der Queue holen ──────────────────────────────────
+        // ── Auftrag aus der Queue holen oder Retry auslösen ─────────────
         xSemaphoreTake(g_coverMux, portMAX_DELAY);
-        String url     = g_pendingCoverUrl;
-        String key     = g_pendingCoverKey;
-        g_dispatchedCoverUrl  = url;
-        g_dispatchedCoverKey  = key;
-        g_coverTaskStartedAt  = millis();
-        g_pendingCoverUrl     = "";
-        g_pendingCoverKey     = "";
+
+        bool hasNew  = !g_pendingCoverUrl.isEmpty();
+        bool doRetry = (!hasNew && g_coverRetryAt > 0
+                        && millis() >= g_coverRetryAt
+                        && !g_dispatchedCoverUrl.isEmpty());
+
+        String url, key;
+        if (hasNew) {
+            // Neuer Auftrag von displayPreloadCover()
+            url = g_pendingCoverUrl;
+            key = g_pendingCoverKey;
+            g_dispatchedCoverUrl  = url;
+            g_dispatchedCoverKey  = key;
+            g_coverTaskStartedAt  = millis();
+            g_pendingCoverUrl     = "";
+            g_pendingCoverKey     = "";
+            g_coverRetryAt        = 0;  // Retry-Zähler zurücksetzen
+        } else if (doRetry) {
+            // Fehlgeschlagener Download wiederholen
+            url = g_dispatchedCoverUrl;
+            key = g_dispatchedCoverKey;
+            g_coverTaskStartedAt  = millis();
+            g_coverRetryAt        = 0;
+        }
+
         xSemaphoreGive(g_coverMux);
 
+        if (!hasNew && !doRetry) continue;  // Keine Arbeit → warten
         if (url.isEmpty()) continue;
 
         // ── Puffer bereitstellen ─────────────────────────────────────────
@@ -130,8 +151,12 @@ void coverDlTask(void* p) {
             HTTPClient http;
             http.setTimeout(8000);
             http.setConnectTimeout(5000);
+            // Watchdog vor HTTP-Operationen feeden (Verbindungsaufbau kann blockieren)
+            esp_task_wdt_reset();
             http.begin(url);
+            esp_task_wdt_reset();
             int code = http.GET();
+            esp_task_wdt_reset();
             if (code == 200) {
                 len = readHttpBody(http, buf, maxLen, 8000);
                 if (len > 0 && isCompleteJpeg(buf, len)) {
@@ -160,10 +185,12 @@ void coverDlTask(void* p) {
             g_coverLen   = len;
             g_dlGen++;
         } else {
-            // Retry-Mechanismus
+            // Retry später
             g_coverRetryAt = millis() + COVER_RETRY_DELAY_MS;
         }
-        g_coverTask = nullptr;
+        // Wichtig: g_coverTask NICHT auf nullptr setzen! Die Task läuft in
+        // einer Endlosschleife und das Handle wird für xTaskNotifyGive()
+        // in displayPreloadCover() benötigt.
         xSemaphoreGive(g_coverMux);
 
         esp_task_wdt_reset();
@@ -211,11 +238,28 @@ void prefetchTask(void* p) {
     esp_task_wdt_add(nullptr);
 
     for (;;) {
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        // Mit 2s-Timeout warten, damit Watchdog regelmässig gefüttert wird
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(2000));
+        esp_task_wdt_reset();
 
-        for (int i = 0; i < g_pfQueueCount; i++) {
-            const String& url = g_pfQueue[i];
-            const String& key = g_pfQueueKeys[i];
+        // Queue-Inhalt lokal sichern (unter Mutex)
+        xSemaphoreTake(g_pfMux, portMAX_DELAY);
+        int count = g_pfQueueCount;
+        // Kopie anlegen, damit Queue während Verarbeitung freigegeben werden kann
+        String urls[SQUEEZE_PREFETCH];
+        String keys[SQUEEZE_PREFETCH];
+        for (int i = 0; i < count; i++) {
+            urls[i] = g_pfQueue[i];
+            keys[i] = g_pfQueueKeys[i];
+        }
+        g_pfQueueCount = 0;
+        xSemaphoreGive(g_pfMux);
+
+        if (count == 0) continue;
+
+        for (int i = 0; i < count; i++) {
+            const String& url = urls[i];
+            const String& key = keys[i];
             if (url.isEmpty()) continue;
 
             // Slot suchen
@@ -250,8 +294,11 @@ void prefetchTask(void* p) {
                 HTTPClient http;
                 http.setTimeout(8000);
                 http.setConnectTimeout(5000);
+                esp_task_wdt_reset();
                 http.begin(url);
+                esp_task_wdt_reset();
                 int code = http.GET();
+                esp_task_wdt_reset();
                 if (code == 200) {
                     len = readHttpBody(http, buf, maxLen, 8000);
                     if (len > 0 && isCompleteJpeg(buf, len)) {
@@ -268,6 +315,7 @@ void prefetchTask(void* p) {
                     }
                 }
                 http.end();
+                esp_task_wdt_reset();
             }
 
             if (ok) {
@@ -279,10 +327,6 @@ void prefetchTask(void* p) {
 
             esp_task_wdt_reset();
         }
-
-        xSemaphoreTake(g_pfMux, portMAX_DELAY);
-        g_pfQueueCount = 0;
-        xSemaphoreGive(g_pfMux);
     }
 }
 
