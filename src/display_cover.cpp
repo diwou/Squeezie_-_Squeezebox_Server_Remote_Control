@@ -79,7 +79,9 @@ bool coverTaskTimedOut(uint32_t now, uint32_t startedAt) {
  */
 void coverDlTask(void* p) {
     (void)p;
-    esp_task_wdt_add(nullptr);
+    // Kein esp_task_wdt_add() – der Task läuft kurz (HTTP mit Timeout) und
+    // terminiert sich selbst. Der Watchdog wird über die main-loop gefeedet
+    // und während des HTTP-Reads in readHttpBody().
     esp_task_wdt_reset();
 
     // ── Parameter unter Mutex kopieren ────────────────────────────────────
