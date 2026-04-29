@@ -37,6 +37,9 @@ size_t readHttpBody(HTTPClient& http, uint8_t* buf, size_t maxLen, uint32_t time
         if (now - last > timeoutMs) break;
         if (!stream->connected()) break;
 
+        // Watchdog feeden während langer HTTP-Reads
+        esp_task_wdt_reset();
+
         int avail = stream->available();
         if (avail <= 0) {
             delay(1);
@@ -146,6 +149,8 @@ void coverDlTask(void* p) {
                 }
             }
             http.end();
+            // Watchdog nach HTTP-Operationen feeden
+            esp_task_wdt_reset();
         }
 
         // ── Ergebnis signalisieren ───────────────────────────────────────

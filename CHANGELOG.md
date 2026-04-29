@@ -64,6 +64,15 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
   (`NVS_NAMESPACE` = `"squeezie"`, `NVS_KEY_CAL_X0` etc.). Dadurch wurden
   gespeicherte Kalibrierungsdaten nicht gefunden und die Kalibrierung bei
   jedem Start erneut gestartet. [`code-review-20260429`]
+- **Watchdog-Bootloop nach Code-Review-Änderungen**: der in `main.cpp`
+  aktivierte HW-Watchdog (`esp_task_wdt_init(10, true)`) führte zu einem
+  Bootloop, weil der Haupt-Task (`loop()`) und der Cover-Download-Task den
+  Watchdog nicht regelmäßig feedeten. Sobald eine Operation länger als 10 s
+  dauerte (z. B. HTTP-Cover-Download), löste der Watchdog einen sofortigen
+  Reset aus. Behoben durch `esp_task_wdt_add(nullptr)` + `esp_task_wdt_reset()`
+  zu Beginn jeder `loop()`-Iteration sowie `esp_task_wdt_reset()` während des
+  HTTP-Reads in `readHttpBody()` und nach dem HTTP-Download in `coverDlTask()`.
+  [`watchdog-bootloop-20260429`]
 
 ## [0.4.5] — 2026-04-23
 

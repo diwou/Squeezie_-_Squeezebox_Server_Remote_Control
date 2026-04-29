@@ -49,9 +49,11 @@ void setup() {
     pinMode(PIN_PLAY_BTN, INPUT_PULLUP);
 
     // ── HW-Watchdog: 10 s Timeout ─────────────────────────────────────────────
-    // Falls ein FreeRTOS-Task hängt (z.B. Cover-Download), startet das Gerät
-    // nach 10 s automatisch neu, statt dauerhaft zu blockieren.
+    // Der Watchdog wird in loop() regelmässig mit esp_task_wdt_reset() gefeedet.
+    // Hängt loop() länger als 10 s (z.B. blockierender HTTP-Request), startet
+    // der ESP automatisch neu, statt dauerhaft zu blockieren.
     esp_task_wdt_init(10, true);
+    esp_task_wdt_add(nullptr);
 
     displayInit();                         // Display + ggf. Touch-Kalibrierung
     displayShowStartup("v" APP_VERSION, ""); // Startup-Screen sofort anzeigen
@@ -64,6 +66,9 @@ void setup() {
 }
 
 void loop() {
+    // ── HW-Watchdog feeden ─────────────────────────────────────────────────────
+    esp_task_wdt_reset();
+
     // ── BOOT-Button: 10 Sek. halten → Factory Reset ───────────────────────────
     static uint32_t bootHoldStart = 0;
     static bool     bootShowing   = false;
