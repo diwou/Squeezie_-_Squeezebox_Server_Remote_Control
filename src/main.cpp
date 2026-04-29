@@ -48,16 +48,16 @@ void setup() {
     pinMode(PIN_BOOT_BTN, INPUT_PULLUP);
     pinMode(PIN_PLAY_BTN, INPUT_PULLUP);
 
-    // ── HW-Watchdog: 10 s Timeout ─────────────────────────────────────────────
-    // Der Watchdog wird in loop() regelmässig mit esp_task_wdt_reset() gefeedet.
-    // Hängt loop() länger als 10 s (z.B. blockierender HTTP-Request), startet
-    // der ESP automatisch neu, statt dauerhaft zu blockieren.
-    esp_task_wdt_init(10, true);
-    esp_task_wdt_add(nullptr);
-
     displayInit();                         // Display + ggf. Touch-Kalibrierung
     displayShowStartup("v" APP_VERSION, ""); // Startup-Screen sofort anzeigen
     webserverInit();                       // WiFi verbinden (blockiert bis zu 15 s)
+
+    // ── HW-Watchdog: 10 s Timeout ─────────────────────────────────────────────
+    // Erst nach webserverInit() aktivieren, da connectWiFi() länger als 10 s
+    // blockieren kann. In loop() wird der Watchdog dann regelmässig mit
+    // esp_task_wdt_reset() gefeedet.
+    esp_task_wdt_init(10, true);
+    esp_task_wdt_add(nullptr);
 
     String ip = wifiGetIP();
     srvLog("[Squeezie] IP: %s", ip.c_str());
