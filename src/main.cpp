@@ -34,13 +34,16 @@ static void handlePlayPauseButton() {
     }
 
     SqueezieStatus status = squeezieGetCachedStatus();
+    wifiBeginUserCommand();
     bool ok = status.playing ? squeezePause(mac) : squeezePlay(mac);
     if (ok) {
-        wifiForceRepoll();
+        status.playing = !status.playing;
+        wifiUpdateCachedStatus(status);
         srvLog("[HW] Play/Pause-Taster ausgelöst.");
     } else {
         srvLog("[HW] Play/Pause fehlgeschlagen.");
     }
+    wifiEndUserCommand(ok);
     pressHandled = true;
 }
 

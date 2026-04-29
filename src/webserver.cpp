@@ -46,6 +46,8 @@ static uint8_t          g_lmsFailStreak = 0;
 static SqueezieStatus   g_status;
 static SemaphoreHandle_t g_statusMux   = nullptr; // schützt g_status (Core0↔Core1)
 static volatile bool     g_forceRepoll = false;   // sofortiger Re-Poll nach Steuerbefehl
+static volatile bool     g_userCommandActive = false;
+static volatile uint32_t g_fastPollUntil = 0;
 static volatile bool     g_otaActive   = false;   // lmsPoll + Cover-DL pausieren während OTA
 static int               g_lastOtaPct  = -1;      // Throttle: UI-Status nur bei %-Änderung
 static volatile int      g_otaUiPct    = -1;      // OTA-Fortschritt, Anzeige im main loop
@@ -69,6 +71,11 @@ static NetCfg g_net;
 static SrvCfg g_srv;
 static String g_playlistId;
 static String g_playlistName;
+
+static constexpr uint32_t LMS_POLL_INTERVAL_MS = 900;
+static constexpr uint32_t LMS_FAST_POLL_INTERVAL_MS = 150;
+static constexpr uint32_t LMS_FAST_POLL_WINDOW_MS = 1800;
+static constexpr uint32_t SYNC_RECONCILE_INTERVAL_MS = 30000;
 
 static void pauseLoopWatchdogForOta() {
     if (g_loopWdtPausedForOta) return;
@@ -847,7 +854,12 @@ static std::vector<String> volumeTargetsForPlayer(const String& mac) {
 static void reconcileSyncVolume() {
     if (!g_srv.syncVolume || g_srv.playerMac.isEmpty()) return;
     uint32_t now = millis();
-    if (now - g_lastSyncReconcile < 350) return;
+    if (now < g_fastPollUntil) return;
+    if (g_lastSyncReconcile == 0) {
+        g_lastSyncReconcile = now;
+        return;
+    }
+    if (now - g_lastSyncReconcile < SYNC_RECONCILE_INTERVAL_MS) return;
     g_lastSyncReconcile = now;
 
     SqueezieStatus status = squeezieGetCachedStatus();
@@ -983,6 +995,7 @@ static void setupRoutes() {
             }
             bool ok = false;
             SqueezieStatus updated = status;
+            wifiBeginUserCommand();
             if      (cmd == "toggle") {
                 ok = status.playing ? squeezePause(mac) : squeezePlay(mac);
                 if (ok) updated.playing = !status.playing;
@@ -1062,15 +1075,17 @@ static void setupRoutes() {
                 if (ok) updated.position = seekPos;
             }
             else {
+                wifiEndUserCommand(false);
                 req->send(400, "application/json", "{\"ok\":false,\"error\":\"unbekannter Befehl\"}");
                 return;
             }
             if (!ok) {
+                wifiEndUserCommand(false);
                 req->send(502, "application/json", "{\"ok\":false,\"error\":\"LMS-Befehl fehlgeschlagen\"}");
                 return;
             }
             if (cmd != "next" && cmd != "prev") wifiUpdateCachedStatus(updated);
-            g_forceRepoll = true;
+            wifiEndUserCommand(true);
             req->send(200, "application/json", "{\"ok\":true}");
         }
     );
@@ -1342,14 +1357,28 @@ void webserverInit() {
     setupRoutes();
     server.begin();
     xTaskCreatePinnedToCore([](void*) {
+        uint32_t nextPollAt = 0;
         for (;;) {
-            if (g_wifiState == WIFI_STATE_CONNECTED && !g_srv.playerMac.isEmpty() && !g_otaActive) {
-                if (wifiPollNow()) reconcileSyncVolume();
-                else srvLog("[LMS] Poll fehlgeschlagen.");
+            uint32_t now = millis();
+            bool forced = g_forceRepoll;
+            if (forced) g_forceRepoll = false;
+
+            if (g_wifiState == WIFI_STATE_CONNECTED
+                && !g_srv.playerMac.isEmpty()
+                && !g_otaActive
+                && !g_userCommandActive
+                && (forced || now >= nextPollAt)) {
+                if (wifiPollNow()) {
+                    reconcileSyncVolume();
+                } else {
+                    srvLog("[LMS] Poll fehlgeschlagen.");
+                }
+                uint32_t interval = millis() < g_fastPollUntil
+                    ? LMS_FAST_POLL_INTERVAL_MS
+                    : LMS_POLL_INTERVAL_MS;
+                nextPollAt = millis() + interval;
             }
-            // Kurz schlafen, damit externe Statusänderungen schneller sichtbar werden.
-            for (int i = 0; i < 2 && !g_forceRepoll; i++) vTaskDelay(pdMS_TO_TICKS(50));
-            g_forceRepoll = false;
+            vTaskDelay(pdMS_TO_TICKS(25));
         }
     }, "lmsPoll", 8192, nullptr, 1, nullptr, 0);
     srvLog("[WebServer] gestartet.");
@@ -1436,5 +1465,16 @@ bool wifiSetPlaylist(const String& id, const String& name, bool loadNow) {
 }
 
 void wifiForceRepoll() {
+    g_fastPollUntil = millis() + LMS_FAST_POLL_WINDOW_MS;
     g_forceRepoll = true;
+}
+
+void wifiBeginUserCommand() {
+    g_userCommandActive = true;
+    g_fastPollUntil = millis() + LMS_FAST_POLL_WINDOW_MS;
+}
+
+void wifiEndUserCommand(bool forceRepoll) {
+    g_userCommandActive = false;
+    if (forceRepoll) wifiForceRepoll();
 }

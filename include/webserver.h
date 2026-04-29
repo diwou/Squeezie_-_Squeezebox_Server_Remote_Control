@@ -108,6 +108,12 @@ bool wifiSetPlaylist(const String& playlistId, const String& playlistName,
 /// @brief Erzwingt eine sofortige LMS-Statusabfrage.
 void wifiForceRepoll();
 
+/// @brief Markiert den Beginn eines Nutzerbefehls und pausiert Hintergrund-Polls kurz.
+void wifiBeginUserCommand();
+
+/// @brief Beendet einen Nutzerbefehl und startet optional einen schnellen Statusabgleich.
+void wifiEndUserCommand(bool forceRepoll = true);
+
 /// @brief Führt eine sofortige LMS-Statusabfrage durch.
 bool wifiPollNow();
 

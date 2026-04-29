@@ -196,17 +196,22 @@ void displayHandleTouch() {
 
         int cy = PL_TRANS_CY;
         if ((long)(tx - 90) * (tx - 90) + (long)(ty - cy) * (ty - cy) <= 28L * 28L) {
-            if (squeezePrev(mac)) wifiForceRepoll();
+            wifiBeginUserCommand();
+            bool ok = squeezePrev(mac);
+            wifiEndUserCommand(ok);
         } else if ((long)(tx - 390) * (tx - 390) + (long)(ty - cy) * (ty - cy) <= 28L * 28L) {
-            if (squeezeNext(mac)) wifiForceRepoll();
+            wifiBeginUserCommand();
+            bool ok = squeezeNext(mac);
+            wifiEndUserCommand(ok);
         } else if ((long)(tx - 240) * (tx - 240) + (long)(ty - cy) * (ty - cy) <= 33L * 33L) {
+            wifiBeginUserCommand();
             bool ok = g_dPlaying ? squeezePause(mac) : squeezePlay(mac);
             if (ok) {
                 SqueezieStatus cached = squeezieGetCachedStatus();
                 cached.playing = !cached.playing;
                 wifiUpdateCachedStatus(cached);
-                wifiForceRepoll();
             }
+            wifiEndUserCommand(ok);
         }
         else if (ty >= PL_PROG_Y && ty < PL_TRANS_Y && g_dDuration > 0) {
             int seekPos = (int)((long)tx * g_dDuration / DISPLAY_WIDTH);

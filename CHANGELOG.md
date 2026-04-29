@@ -7,6 +7,15 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 ## [Unreleased]
 
 ### Behoben
+- **Steuerbefehle reagierten träge**: der LMS-Hintergrund-Poll lief nach den
+  Code-Review-Änderungen praktisch dauerhaft und startete zusätzlich sehr häufig
+  Sync-Volume-Abgleiche mit weiteren JSON-RPC-Aufrufen. Nutzerbefehle teilen
+  sich dadurch die LMS-Verbindung mit Hintergrundarbeit. Der Poll läuft jetzt
+  mit festen Intervallen, schaltet nach Nutzerbefehlen kurz in einen schnellen
+  Statusabgleich und verschiebt Sync-Reconciliation aus dieser Phase. Der
+  periodische Sync-Abgleich läuft außerdem deutlich seltener, weil er je nach
+  Gruppe mehrere zusätzliche LMS-Abfragen auslöst.
+  [`control-latency-20260429`]
 - **ArduinoOTA durch Watchdog-Reset abgebrochen**: `ArduinoOTA.handle()` führt
   den TCP-Transfer blockierend im `loop()`-Task aus. Da dieser Task seit den
   Code-Review-Änderungen beim HW-Watchdog angemeldet war, konnte er während
