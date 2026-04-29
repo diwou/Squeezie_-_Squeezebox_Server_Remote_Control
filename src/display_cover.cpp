@@ -1,7 +1,7 @@
 #include "display_intern.h"
 #include <esp_task_wdt.h>
 
-// ─── Cover-Download (FreeRTOS-Task auf Core 0) ─────────────────────────────
+// ─── Cover-Download (Single-Shot FreeRTOS-Task auf Core 0) ───────────────────
 
 /**
  * @brief Prüft, ob ein Puffer einen vollständigen JPEG enthält.
@@ -68,134 +68,100 @@ bool coverTaskTimedOut(uint32_t now, uint32_t startedAt) {
 }
 
 /**
- * @brief FreeRTOS-Task: Lädt ein Cover-JPEG von einer HTTP-URL herunter.
+ * @brief Single-Shot FreeRTOS-Task: Lädt ein Cover-JPEG von einer HTTP-URL.
  *
- * Läuft auf Core 0. Nutzt g_coverMux für thread-sicheren Zugriff auf
- * g_pendingCoverUrl/g_pendingCoverKey. Schreibt das Ergebnis in g_coverDlBuf
- * und signalisiert Fertigstellung über g_coverReady/g_dlGen.
- *
- * Unterstützt LittleFS-Caching: Wenn ein cacheKey gesetzt ist, wird vor dem
- * HTTP-Download im LittleFS nachgesehen, ob die Datei bereits gecached ist.
- * Nach erfolgreichem Download wird der Cache aktualisiert.
+ * Wird von displayPreloadCover() erzeugt und läuft auf Core 0.
+ * Kopiert die Download-Parameter unter Mutex, führt den Download
+ * (mit LittleFS-Cache) durch und signalisiert das Ergebnis
+ * über g_coverReady/g_dlGen. Der Task terminiert sich selbst.
  *
  * @param p Unused (FreeRTOS-Parameter).
  */
 void coverDlTask(void* p) {
     (void)p;
     esp_task_wdt_add(nullptr);
+    esp_task_wdt_reset();
 
-    for (;;) {
-        // Mit 2s-Timeout warten, damit Watchdog regelmässig gefüttert wird
-        // und Retry- oder Timeout-Prüfungen möglich sind.
-        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(2000));
-        esp_task_wdt_reset();
+    // ── Parameter unter Mutex kopieren ────────────────────────────────────
+    xSemaphoreTake(g_coverMux, portMAX_DELAY);
+    String url = g_pendingCoverUrl;
+    String key = g_pendingCoverKey;
+    g_pendingCoverUrl     = "";
+    g_pendingCoverKey     = "";
+    g_coverTaskStartedAt  = millis();
+    xSemaphoreGive(g_coverMux);
 
-        // ── Auftrag aus der Queue holen oder Retry auslösen ─────────────
-        xSemaphoreTake(g_coverMux, portMAX_DELAY);
+    size_t len = 0;
+    bool   ok  = false;
 
-        bool hasNew  = !g_pendingCoverUrl.isEmpty();
-        bool doRetry = (!hasNew && g_coverRetryAt > 0
-                        && millis() >= g_coverRetryAt
-                        && !g_dispatchedCoverUrl.isEmpty());
-
-        String url, key;
-        if (hasNew) {
-            // Neuer Auftrag von displayPreloadCover()
-            url = g_pendingCoverUrl;
-            key = g_pendingCoverKey;
-            g_dispatchedCoverUrl  = url;
-            g_dispatchedCoverKey  = key;
-            g_coverTaskStartedAt  = millis();
-            g_pendingCoverUrl     = "";
-            g_pendingCoverKey     = "";
-            g_coverRetryAt        = 0;  // Retry-Zähler zurücksetzen
-        } else if (doRetry) {
-            // Fehlgeschlagener Download wiederholen
-            url = g_dispatchedCoverUrl;
-            key = g_dispatchedCoverKey;
-            g_coverTaskStartedAt  = millis();
-            g_coverRetryAt        = 0;
-        }
-
-        xSemaphoreGive(g_coverMux);
-
-        if (!hasNew && !doRetry) continue;  // Keine Arbeit → warten
-        if (url.isEmpty()) continue;
-
-        // ── Puffer bereitstellen ─────────────────────────────────────────
-        // g_coverDlBuf wird in displayInit() allokiert (PSRAM, 64 kB).
-        if (!g_coverDlBuf) continue;
-        size_t maxLen = 64000;
-
-        uint8_t* buf = g_coverDlBuf;
-        size_t   len = 0;
-        bool     ok  = false;
-
-        // ── Cache prüfen ─────────────────────────────────────────────────
+    if (!url.isEmpty() && g_coverDlBuf) {
+        // ── LittleFS-Cache prüfen ─────────────────────────────────────────
         if (key.length() > 0) {
             String cachePath = "/cover/" + key + ".jpg";
             if (LittleFS.exists(cachePath)) {
                 File f = LittleFS.open(cachePath, "r");
                 if (f) {
-                    len = f.read(buf, maxLen);
-                    if (len > 0 && isCompleteJpeg(buf, len)) {
-                        ok = true;
-                    }
+                    len = f.read(g_coverDlBuf, 64000);
+                    if (len > 0 && isCompleteJpeg(g_coverDlBuf, len)) ok = true;
                     f.close();
                 }
             }
         }
 
-        // ── HTTP-Download (falls nicht gecached) ─────────────────────────
+        // ── HTTP-Download (falls nicht gecached) ──────────────────────────
         if (!ok) {
             HTTPClient http;
-            http.setTimeout(8000);
-            http.setConnectTimeout(5000);
-            // Watchdog vor HTTP-Operationen feeden (Verbindungsaufbau kann blockieren)
+            http.setTimeout(3000);
             esp_task_wdt_reset();
-            http.begin(url);
-            esp_task_wdt_reset();
-            int code = http.GET();
-            esp_task_wdt_reset();
-            if (code == 200) {
-                len = readHttpBody(http, buf, maxLen, 8000);
-                if (len > 0 && isCompleteJpeg(buf, len)) {
-                    ok = true;
-                    // Cache schreiben
-                    if (key.length() > 0) {
-                        if (!LittleFS.exists("/cover")) LittleFS.mkdir("/cover");
-                        String cachePath = "/cover/" + key + ".jpg";
-                        File f = LittleFS.open(cachePath, "w");
-                        if (f) {
-                            f.write(buf, len);
-                            f.close();
+            if (http.begin(url)) {
+                esp_task_wdt_reset();
+                int code = http.GET();
+                esp_task_wdt_reset();
+                if (code == 200) {
+                    len = readHttpBody(http, g_coverDlBuf, 64000, 1200);
+                    if (len > 0 && isCompleteJpeg(g_coverDlBuf, len)) {
+                        ok = true;
+                        // In LittleFS-Cache schreiben
+                        if (key.length() > 0) {
+                            if (!LittleFS.exists("/cover")) LittleFS.mkdir("/cover");
+                            String cachePath = "/cover/" + key + ".jpg";
+                            File f = LittleFS.open(cachePath, "w");
+                            if (f) { f.write(g_coverDlBuf, len); f.close(); }
                         }
                     }
                 }
+                http.end();
+                esp_task_wdt_reset();
+            } else {
+                esp_task_wdt_reset();
             }
-            http.end();
-            // Watchdog nach HTTP-Operationen feeden
-            esp_task_wdt_reset();
         }
-
-        // ── Ergebnis signalisieren ───────────────────────────────────────
-        xSemaphoreTake(g_coverMux, portMAX_DELAY);
-        if (ok) {
-            g_coverReady = true;
-            g_coverLen   = len;
-            g_dlGen++;
-        } else {
-            // Retry später
-            g_coverRetryAt = millis() + COVER_RETRY_DELAY_MS;
-        }
-        // Wichtig: g_coverTask NICHT auf nullptr setzen! Die Task läuft in
-        // einer Endlosschleife und das Handle wird für xTaskNotifyGive()
-        // in displayPreloadCover() benötigt.
-        xSemaphoreGive(g_coverMux);
-
-        esp_task_wdt_reset();
     }
+
+    // ── Ergebnis veröffentlichen ──────────────────────────────────────────
+    xSemaphoreTake(g_coverMux, portMAX_DELAY);
+    if (ok) {
+        g_coverLen        = len;
+        g_loadedCoverKey  = key;
+        g_coverReady      = true;
+        g_dlGen++;
+        g_coverRetryAt    = 0;
+    } else {
+        g_coverLen        = 0;
+        g_loadedCoverKey  = "";
+        g_dispatchedCoverUrl  = "";
+        g_dispatchedCoverKey  = "";
+        g_coverRetryAt    = millis() + COVER_RETRY_DELAY_MS;
+    }
+    g_coverTask          = nullptr;
+    g_coverTaskStartedAt = 0;
+    xSemaphoreGive(g_coverMux);
+
+    esp_task_wdt_reset();
+    vTaskDelete(nullptr);
 }
+
+// ─── displayCopyCover / displayGetCoverSerial ─────────────────────────────────
 
 /**
  * @brief Kopiert das aktuelle Cover thread-sicher in einen Vektor.
@@ -223,11 +189,14 @@ uint32_t displayGetCoverSerial() {
     return g_coverSerial;
 }
 
+// ─── displayPreloadCover ──────────────────────────────────────────────────────
+
 /**
- * @brief Startet einen asynchronen Cover-Download.
+ * @brief Startet einen asynchronen Cover-Download (Single-Shot-Task).
  *
  * Kann aus jedem Task (z. B. lmsPoll auf Core 0) aufgerufen werden.
- * Der Download läuft im coverDlTask auf Core 0.
+ * Erzeugt einen neuen coverDlTask auf Core 0, der das JPEG lädt,
+ * signalisiert und sich selbst terminiert (wie im Code vor dem Code-Review).
  *
  * @param url      Vollständige HTTP-URL zum Cover-JPEG.
  * @param cacheKey Optionaler Cache-Key für LittleFS.
@@ -237,25 +206,38 @@ void displayPreloadCover(const String& url, const String& cacheKey) {
 
     xSemaphoreTake(g_coverMux, portMAX_DELAY);
 
-    // Nicht dispatchen, wenn exakt gleiche URL + Key bereits in Arbeit
-    if (url == g_dispatchedCoverUrl && cacheKey == g_dispatchedCoverKey) {
+    // Bereits geladen? (Cache-Hit)
+    if (!cacheKey.isEmpty() && g_coverLen > 0 && g_loadedCoverKey == cacheKey) {
         xSemaphoreGive(g_coverMux);
         return;
     }
-    if (url == g_pendingCoverUrl && cacheKey == g_pendingCoverKey) {
+    // Task läuft bereits?
+    if (g_coverTask != nullptr) {
+        // Timeout? Dann alten Task aufgeben
+        if (coverTaskTimedOut(millis(), g_coverTaskStartedAt)) {
+            g_coverTask = nullptr;
+        } else {
+            xSemaphoreGive(g_coverMux);
+            return;
+        }
+    }
+    // Retry-Blockade?
+    if (g_coverRetryAt != 0 && millis() < g_coverRetryAt) {
         xSemaphoreGive(g_coverMux);
         return;
     }
 
-    g_pendingCoverUrl  = url;
-    g_pendingCoverKey  = cacheKey;
-    g_coverRetryAt     = 0;
+    // Neuen Download anstossen
+    g_pendingCoverUrl    = url;
+    g_pendingCoverKey    = cacheKey;
+    g_dispatchedCoverUrl = url;
+    g_dispatchedCoverKey = cacheKey;
+    g_coverRetryAt       = 0;
+    g_coverTaskStartedAt = millis();
+    g_coverReady         = false;
+    g_coverLen           = 0;
+    g_loadedCoverKey     = "";
 
-    TaskHandle_t task = g_coverTask;
-    if (task) {
-        xTaskNotifyGive(task);
-    }
+    xTaskCreatePinnedToCore(coverDlTask, "coverDl", 8192, nullptr, 1, &g_coverTask, 0);
     xSemaphoreGive(g_coverMux);
 }
-
-

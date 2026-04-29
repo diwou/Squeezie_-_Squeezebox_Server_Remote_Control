@@ -10,6 +10,7 @@
 #include <Preferences.h>
 #include <Update.h>
 #include <ArduinoOTA.h>
+#include <esp_task_wdt.h>
 #include <time.h>
 #include <stdarg.h>
 #include <vector>

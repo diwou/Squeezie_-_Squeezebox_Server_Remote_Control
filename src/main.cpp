@@ -96,6 +96,7 @@ void loop() {
     bootHoldStart = 0;
 
     webserverLoop();       // WiFi-Monitor, DNS (AP), Squeeze-Polling
+    esp_task_wdt_reset();  // Watchdog direkt nach OTA-Paketverarbeitung feeden
     int otaPct = -1;
     bool otaDirty = wifiConsumeOtaProgress(otaPct);
     if (wifiIsOtaActive()) {
@@ -105,6 +106,7 @@ void loop() {
             lastOtaPct = otaPct;
         }
         displayShowOTA(otaPct);
+        esp_task_wdt_reset();  // Watchdog vor OTA-Delay feeden
         if (otaPct < 100) {
             delay(40);
             return;

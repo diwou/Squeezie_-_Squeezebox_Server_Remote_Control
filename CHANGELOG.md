@@ -27,14 +27,11 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
   analog zur Display-Logik. [`b25ea32`]
 
 ### Geändert
-- **Cover-Download von Preload auf sofortige Notifikation umgestellt**:
-  `displayPreloadCover()` erzeugte früher für jeden Cover-Download einen
-  neuen FreeRTOS-Task, der nach Abschluss des Downloads terminiert wurde.
-  Dieses Preload-Modell wurde durch einen persistenten `coverDlTask` ersetzt,
-  der per `xTaskNotifyGive()`/`ulTaskNotifyTake()` neue Aufträge erhält und
-  in einer Endlosschleife läuft. Dadurch entfällt der Overhead der wiederholten
-  Task-Erzeugung und -Löschung. Siehe auch „Cover-Download-Task-Handle zerstört
-  nach erstem Download" unten. [`8bb8eaf`]
+- **Cover-Download auf Single-Shot-Task zurückgesetzt**: Der im Code-Review
+  eingeführte persistente Notification-Task verursachte Latenzen von 8–10 s
+  beim Cover-Laden und 2–3 s beim Titelwechsel. `displayPreloadCover()` erzeugt
+  jetzt wieder einen eigenen FreeRTOS-Task pro Download (`xTaskCreatePinnedToCore`),
+  der nach der Übertragung terminiert (`vTaskDelete`). [`REPLACE_WITH_HASH`]
 - **Prefetch-Mechanismus vollständig entfernt**: Der Prefetch-Mechanismus
   (`prefetchTask`, `displayQueuePrefetch()`, Prefetch-Slots, PSRAM-Puffer)
   wurde komplett ausgebaut, da er wiederholt Probleme mit konkurrierenden
