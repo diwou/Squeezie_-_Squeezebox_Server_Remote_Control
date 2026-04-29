@@ -91,12 +91,4 @@ uint32_t       displayGetCoverSerial();
  */
 void displayPreloadCover(const String& url, const String& cacheKey = "");
 
-/**
- * @brief Befüllt die Prefetch-Queue mit Cover-URLs der nächsten Tracks.
- * @param urls  Array von Cover-URLs (Länge count).
- * @param keys  Array von Cache-Keys (Länge count).
- * @param count Anzahl der Einträge (max SQUEEZE_PREFETCH).
- *
- * Die Cover werden sequenziell auf Core 0 vorgeladen.
- */
-void displayQueuePrefetch(const String* urls, const String* keys, int count);
+

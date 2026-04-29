@@ -201,8 +201,7 @@ bool squeezeGetSyncGroupMembers(const String& playerMac, std::vector<String>& ou
 bool squeezeGetStatus(const String& playerMac, SqueezieStatus& out) {
     JsonDocument resp;
     // Tags: a=artist, A=albumartist, l=album, K=artwork_url, c=coverid, d=duration, t=tracknum
-    // SQUEEZE_PREFETCH+1 Einträge abrufen: [0]=aktuell, [1..N]=nächste für Prefetch
-    if (!jsonRpc(playerMac, "[\"status\",\"-\"," + String(SQUEEZE_PREFETCH + 1) + ",\"tags:aAlKcdt\"]",
+    if (!jsonRpc(playerMac, "[\"status\",\"-\",1,\"tags:aAlKcdt\"]",
                  resp, 800)) return false;
     JsonObject r = resp["result"].as<JsonObject>();
     if (r.isNull()) return false;
@@ -215,7 +214,6 @@ bool squeezeGetStatus(const String& playerMac, SqueezieStatus& out) {
     out.shuffleMode = r["playlist shuffle"].as<int>();
     out.position    = (int)r["time"].as<float>();
     out.playerName  = r["player_name"].as<String>();
-    out.nextCount   = 0;
     JsonArray loop  = r["playlist_loop"].as<JsonArray>();
     if (!loop.isNull() && loop.size() > 0) {
         JsonObject t  = loop[0].as<JsonObject>();
@@ -226,21 +224,10 @@ bool squeezeGetStatus(const String& playerMac, SqueezieStatus& out) {
         out.duration  = (int)t["duration"].as<float>();
         out.coverUrl = currentCoverUrlForPlayer(playerMac, 128);
         out.coverKey = trackKey(t);
-        // Cover-URLs der Folgetracks
-        for (size_t i = 1; i < loop.size() && out.nextCount < SQUEEZE_PREFETCH; i++) {
-            JsonObject nextTrack = loop[i].as<JsonObject>();
-            String nextCid = nextTrack["coverid"].as<String>();
-            String nextUrl = coverUrlForId(nextCid, 128);
-            if (!nextUrl.isEmpty()) {
-                out.nextCoverUrls[out.nextCount] = nextUrl;
-                out.nextCoverKeys[out.nextCount] = nextCid;
-                out.nextCount++;
-            }
-        }
     }
-    srvLog("[LMS] %s | vol=%d%s pos=%d pf=%d",
+    srvLog("[LMS] %s | vol=%d%s pos=%d",
            out.title.isEmpty() ? "-" : out.title.c_str(),
-           out.volume, out.muted ? " muted" : "", out.position, out.nextCount);
+           out.volume, out.muted ? " muted" : "", out.position);
     return true;
 }
 

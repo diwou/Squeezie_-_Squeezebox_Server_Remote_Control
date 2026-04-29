@@ -6,7 +6,29 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 
 ## [Unreleased]
 
+### Behoben
+- **Cover-Wechsel bei Titelwechsel geblockt**: `displayPreloadCover()` prüfte
+  nur auf URL-Identität, nicht auf Cover-Key. Da die aktuelle Cover-URL
+  (`/music/current/…`) immer gleich bleibt, wurde jeder Cover-Download nach
+  dem ersten Titel ignoriert. Jetzt werden URL und Key gemeinsam verglichen.
+  [`3468014`]
+- **Cover-Anzeige in der Web-Oberfläche**: `displayCopyCover()` prüfte auf
+  `g_coverReady`, das bereits `false` ist, sobald der Display-Task das Cover
+  verarbeitet hat. Dadurch konnte die `/api/cover`-Route nie ein Cover
+  ausliefern. [`3468014`]
+- **Web-Oberfläche aktualisiert Position träge**: Die Status-API gab die rohe
+  LMS-Position zurück, die sich nur bei erfolgreichem LMS-Poll ändert. Bei
+  langsamen oder ausfallenden Polls blieb die Anzeige秒lang stehen. Jetzt
+  interpoliert auch die Web-API die Position lokal zwischen den Polls,
+  analog zur Display-Logik. [`3468014`]
+
 ### Geändert
+- **Prefetch-Mechanismus vollständig entfernt**: Der Prefetch-Mechanismus
+  (`prefetchTask`, `displayQueuePrefetch()`, Prefetch-Slots, PSRAM-Puffer)
+  wurde komplett ausgebaut, da er wiederholt Probleme mit konkurrierenden
+  HTTP-Downloads und Task-Interferenzen verursachte. Der LMS-Poll fragt
+  nur noch den aktuellen Titel ab (statt `SQUEEZE_PREFETCH+1` Einträge).
+  [`3468014`]
 - **Code-Review-Punkte umgesetzt**: diverse Verbesserungen aus dem systematischen
   Code-Review – siehe Einzelauflistung unten. [`code-review-20260429`]
 
@@ -75,18 +97,18 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
   Aufteilung von `display.cpp` fehlte in `display_screens.cpp` der gesamte Block
   zum Zeichnen von Titel (bold, Font 3, weiss), Artist (Font 2, grün) und Album
   (Font 2, hellgrau) inklusive Scroll-Logik (fraktionaler Akkumulator),
-  Textbreiten-Caching und Track-Info-Zeile. [`5449dcd`]
+  Textbreiten-Caching und Track-Info-Zeile. [`8bb8eaf`]
 - **Uhrzeit aus separater Bottom-Zeile entfernt**: nach der Refaktorierung wurde
   die Uhrzeit zusätzlich als `drawInfoLine()` bei `y=306` (schwarzer Balken unten)
   angezeigt, statt wie zuvor im Header. Jetzt wird die Uhrzeit wieder zentriert im
-  `drawPlayerHeader()`-Bereich aktualisiert. [`5449dcd`]
+  `drawPlayerHeader()`-Bereich aktualisiert. [`8bb8eaf`]
 - **Cover-Download-Task-Handle zerstört nach erstem Download**: `coverDlTask()`
   setzte `g_coverTask = nullptr` (Zeile 166), was dazu führte, dass
   `displayPreloadCover()` keine Notification mehr an den Task senden konnte
   (`if (task)` schlug fehl). Dadurch wurden nach dem ersten Song keine Cover
   mehr geladen. Behoben durch Entfernen der Nullsetzung – die Task läuft in
   einer Endlosschleife und das Handle muss für zukünftige Notifications erhalten
-  bleiben. [`5449dcd`]
+  bleiben. [`8bb8eaf`]
 - **Watchdog-Timeout in Cover-Download- und Prefetch-Task behoben**:
   `coverDlTask()` und `prefetchTask()` verwendeten `ulTaskNotifyTake(pdTRUE,
   portMAX_DELAY)` zusammen mit `esp_task_wdt_add()`. Da blockierte Tasks den
@@ -95,12 +117,12 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
   `ulTaskNotifyTake(..., pdMS_TO_TICKS(2000))` – der Task erwacht alle 2 s und
   füttert den Watchdog. Zusätzlich wurde `esp_task_wdt_reset()` vor den
   HTTP-Operationen `http.begin()` und `http.GET()` ergänzt, die ohne Feeding
-  ebenfalls den Watchdog auslösen konnten. [`5449dcd`]
+  ebenfalls den Watchdog auslösen konnten. [`8bb8eaf`]
 - **Automatischer Retry für fehlgeschlagene Cover-Downloads**: `coverDlTask()`
   prüft jetzt nach jedem Timeout (2 s), ob ein fehlgeschlagener Download zur
   Wiederholung ansteht (`g_coverRetryAt`). Nach `COVER_RETRY_DELAY_MS` (15 s)
   wird der fehlgeschlagene Download automatisch neu gestartet, ohne dass der
-  gesamte Task neu erzeugt werden muss. [`5449dcd`]
+  gesamte Task neu erzeugt werden muss. [`8bb8eaf`]
 
 ## [0.4.5] — 2026-04-23
 

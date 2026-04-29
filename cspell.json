@@ -518,7 +518,8 @@
     "feedeten",
     "gefeedet",
     "nullptr",
-    "Refaktorierung"
+    "Refaktorierung",
+    "dedup"
   ],
   "ignorePaths": [
     ".pio/**",

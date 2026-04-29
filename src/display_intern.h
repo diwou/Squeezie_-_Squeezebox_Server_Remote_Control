@@ -139,21 +139,6 @@ extern SemaphoreHandle_t g_coverMux;
 extern const uint32_t COVER_RETRY_DELAY_MS;
 extern const uint32_t COVER_TASK_TIMEOUT_MS;
 
-// Prefetch-Slots
-struct PrefetchSlot {
-    uint8_t* buf   = nullptr;
-    size_t   len   = 0;
-    bool     ready = false;
-    String   url;
-    String   key;
-};
-extern PrefetchSlot      g_pf[SQUEEZE_PREFETCH];
-extern String            g_pfQueue[SQUEEZE_PREFETCH];
-extern String            g_pfQueueKeys[SQUEEZE_PREFETCH];
-extern int               g_pfQueueCount;
-extern SemaphoreHandle_t g_pfMux;
-extern TaskHandle_t      g_pfTask;
-
 // Cover-Candidate (Stabilisierung über 2 Polls)
 extern String g_coverDrawnForTitle;
 extern bool   g_coverPredrawn;
@@ -206,7 +191,6 @@ bool     isCompleteJpeg(const uint8_t* buf, size_t len);
 size_t   readHttpBody(HTTPClient& http, uint8_t* buf, size_t maxLen, uint32_t timeoutMs);
 bool     coverTaskTimedOut(uint32_t now, uint32_t startedAt);
 void     coverDlTask(void*);
-void     prefetchTask(void*);
 
 // display_screens.cpp
 void     drawPlaylistList();

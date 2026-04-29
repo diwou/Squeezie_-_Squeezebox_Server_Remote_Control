@@ -759,11 +759,28 @@ fetch('/api/config').then(function(r){return r.json();}).then(function(d){
 
 // ─── API-Hilfsfunktion ────────────────────────────────────────────────────────
 
+static int interpolatePosition(const SqueezieStatus& s) {
+    static int      lastPos  = -1;
+    static uint32_t lastMs   = 0;
+    if (s.playing) {
+        if (s.position != lastPos) {
+            lastPos = s.position;
+            lastMs  = millis();
+        }
+        int elapsed = (int)((millis() - lastMs) / 1000);
+        return lastPos + elapsed;
+    }
+    lastPos = s.position;
+    lastMs  = millis();
+    return s.position;
+}
+
 static String statusToJson() {
     xSemaphoreTake(g_statusMux, portMAX_DELAY);
     SqueezieStatus s = g_status;
     xSemaphoreGive(g_statusMux);
     uint32_t coverV = displayGetCoverSerial();
+    int pos = interpolatePosition(s);
     JsonDocument doc;
     doc["playing"]    = s.playing;
     doc["title"]      = s.title;
@@ -771,7 +788,7 @@ static String statusToJson() {
     doc["album"]      = s.album;
     doc["trackNum"]   = s.trackNum;
     doc["duration"]   = s.duration;
-    doc["position"]   = s.position;
+    doc["position"]   = pos;
     doc["volume"]     = s.volume;
     doc["muted"]      = s.muted;
     doc["repeatMode"] = s.repeatMode;
@@ -854,7 +871,6 @@ bool wifiPollNow() {
     xSemaphoreTake(g_statusMux, portMAX_DELAY);
     g_status = tmp;
     xSemaphoreGive(g_statusMux);
-    displayQueuePrefetch(tmp.nextCoverUrls, tmp.nextCoverKeys, tmp.nextCount);
     displayPreloadCover(tmp.coverUrl, tmp.coverKey);
     return true;
 }

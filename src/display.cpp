@@ -67,14 +67,6 @@ SemaphoreHandle_t g_coverMux      = nullptr;
 const uint32_t COVER_RETRY_DELAY_MS = 15000;
 const uint32_t COVER_TASK_TIMEOUT_MS = 12000;
 
-// ─── Prefetch-Slots ──────────────────────────────────────────────────────────
-PrefetchSlot      g_pf[SQUEEZE_PREFETCH];
-String            g_pfQueue[SQUEEZE_PREFETCH];
-String            g_pfQueueKeys[SQUEEZE_PREFETCH];
-int               g_pfQueueCount  = 0;
-SemaphoreHandle_t g_pfMux         = nullptr;
-TaskHandle_t      g_pfTask        = nullptr;
-
 // ─── Cover-Candidate (Stabilisierung über 2 Polls) ──────────────────────────
 String g_coverDrawnForTitle;
 bool   g_coverPredrawn = false;

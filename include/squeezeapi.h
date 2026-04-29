@@ -14,9 +14,6 @@
 #include <Arduino.h>
 #include <vector>
 
-/// Anzahl der vorauszuladenden Cover-Slots für das Prefetch-System
-#define SQUEEZE_PREFETCH 4
-
 /**
  * @struct SqueeziePlayer
  * @brief Repräsentiert einen Squeezebox-Player im Netzwerk.
@@ -56,9 +53,6 @@ struct SqueezieStatus {
     int    repeatMode  = 0;       ///< 0=aus, 1=Titel, 2=Playlist
     int    shuffleMode = 0;       ///< 0=aus, 1=Titel, 2=Album
     String playerName;            ///< Anzeigename des aktuellen Players
-    String nextCoverUrls[SQUEEZE_PREFETCH]; ///< Cover-URLs der nächsten Tracks für Prefetch
-    String nextCoverKeys[SQUEEZE_PREFETCH]; ///< LMS-coverid der nächsten Tracks für Prefetch
-    int    nextCount   = 0;       ///< Anzahl gültiger Einträge in nextCoverUrls/Keys
 };
 
 /**

@@ -551,23 +551,12 @@ void displayInit() {
     if (!g_coverBuf)   g_coverBuf   = (uint8_t*)ps_malloc(64000);
     if (!g_coverDlBuf) g_coverDlBuf = (uint8_t*)ps_malloc(64000);
 
-    // Prefetch-Puffer in PSRAM allozieren
-    for (int i = 0; i < SQUEEZE_PREFETCH; i++) {
-        if (!g_pf[i].buf) g_pf[i].buf = (uint8_t*)ps_malloc(64000);
-    }
-
-    // Mutexe erstellen
+    // Cover-Puffer in PSRAM allozieren
     if (!g_coverMux) g_coverMux = xSemaphoreCreateMutex();
-    if (!g_pfMux)    g_pfMux    = xSemaphoreCreateMutex();
 
     // Cover-Download-Task auf Core 0 starten
     if (!g_coverTask) {
         xTaskCreatePinnedToCore(coverDlTask, "coverDl", 8192, nullptr, 1, &g_coverTask, 0);
-    }
-
-    // Prefetch-Task auf Core 0 starten
-    if (!g_pfTask) {
-        xTaskCreatePinnedToCore(prefetchTask, "pfCover", 8192, nullptr, 1, &g_pfTask, 0);
     }
 
     // Kalibrierungsdaten aus NVS laden

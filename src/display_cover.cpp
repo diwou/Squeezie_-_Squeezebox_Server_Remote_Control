@@ -206,7 +206,7 @@ void coverDlTask(void* p) {
 bool displayCopyCover(std::vector<uint8_t>& out) {
     xSemaphoreTake(g_coverMux, portMAX_DELAY);
     bool ok = false;
-    if (g_coverReady && g_coverBuf && g_coverLen > 0) {
+    if (g_coverBuf && g_coverLen > 0) {
         out.assign(g_coverBuf, g_coverBuf + g_coverLen);
         ok = true;
     }
@@ -223,113 +223,6 @@ uint32_t displayGetCoverSerial() {
     return g_coverSerial;
 }
 
-// ─── Prefetch-Task ─────────────────────────────────────────────────────────
-
-/**
- * @brief FreeRTOS-Task: Lädt Cover im Voraus (Prefetch) auf Core 0.
- *
- * Verarbeitet die g_pfQueue sequenziell. Jeder Slot wird mit einem JPEG
- * aus PSRAM befüllt und als ready markiert.
- *
- * @param p Unused.
- */
-void prefetchTask(void* p) {
-    (void)p;
-    esp_task_wdt_add(nullptr);
-
-    for (;;) {
-        // Mit 2s-Timeout warten, damit Watchdog regelmässig gefüttert wird
-        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(2000));
-        esp_task_wdt_reset();
-
-        // Queue-Inhalt lokal sichern (unter Mutex)
-        xSemaphoreTake(g_pfMux, portMAX_DELAY);
-        int count = g_pfQueueCount;
-        // Kopie anlegen, damit Queue während Verarbeitung freigegeben werden kann
-        String urls[SQUEEZE_PREFETCH];
-        String keys[SQUEEZE_PREFETCH];
-        for (int i = 0; i < count; i++) {
-            urls[i] = g_pfQueue[i];
-            keys[i] = g_pfQueueKeys[i];
-        }
-        g_pfQueueCount = 0;
-        xSemaphoreGive(g_pfMux);
-
-        if (count == 0) continue;
-
-        for (int i = 0; i < count; i++) {
-            const String& url = urls[i];
-            const String& key = keys[i];
-            if (url.isEmpty()) continue;
-
-            // Slot suchen
-            int slot = -1;
-            for (int s = 0; s < SQUEEZE_PREFETCH; s++) {
-                if (!g_pf[s].ready && g_pf[s].buf) {
-                    slot = s;
-                    break;
-                }
-            }
-            if (slot < 0) break;
-
-            // Cache prüfen
-            size_t   len = 0;
-            uint8_t* buf = g_pf[slot].buf;
-            size_t maxLen = 64000;
-            bool ok = false;
-
-            if (key.length() > 0) {
-                String cachePath = "/cover/" + key + ".jpg";
-                if (LittleFS.exists(cachePath)) {
-                    File f = LittleFS.open(cachePath, "r");
-                    if (f) {
-                        len = f.read(buf, maxLen);
-                        if (len > 0 && isCompleteJpeg(buf, len)) ok = true;
-                        f.close();
-                    }
-                }
-            }
-
-            if (!ok) {
-                HTTPClient http;
-                http.setTimeout(8000);
-                http.setConnectTimeout(5000);
-                esp_task_wdt_reset();
-                http.begin(url);
-                esp_task_wdt_reset();
-                int code = http.GET();
-                esp_task_wdt_reset();
-                if (code == 200) {
-                    len = readHttpBody(http, buf, maxLen, 8000);
-                    if (len > 0 && isCompleteJpeg(buf, len)) {
-                        ok = true;
-                        if (key.length() > 0) {
-                            if (!LittleFS.exists("/cover")) LittleFS.mkdir("/cover");
-                            String cachePath = "/cover/" + key + ".jpg";
-                            File f = LittleFS.open(cachePath, "w");
-                            if (f) {
-                                f.write(buf, len);
-                                f.close();
-                            }
-                        }
-                    }
-                }
-                http.end();
-                esp_task_wdt_reset();
-            }
-
-            if (ok) {
-                g_pf[slot].len   = len;
-                g_pf[slot].ready = true;
-                g_pf[slot].url   = url;
-                g_pf[slot].key   = key;
-            }
-
-            esp_task_wdt_reset();
-        }
-    }
-}
-
 /**
  * @brief Startet einen asynchronen Cover-Download.
  *
@@ -344,8 +237,12 @@ void displayPreloadCover(const String& url, const String& cacheKey) {
 
     xSemaphoreTake(g_coverMux, portMAX_DELAY);
 
-    // Nicht dispatchen, wenn bereits in Arbeit
-    if (url == g_dispatchedCoverUrl || url == g_pendingCoverUrl) {
+    // Nicht dispatchen, wenn exakt gleiche URL + Key bereits in Arbeit
+    if (url == g_dispatchedCoverUrl && cacheKey == g_dispatchedCoverKey) {
+        xSemaphoreGive(g_coverMux);
+        return;
+    }
+    if (url == g_pendingCoverUrl && cacheKey == g_pendingCoverKey) {
         xSemaphoreGive(g_coverMux);
         return;
     }
@@ -361,25 +258,4 @@ void displayPreloadCover(const String& url, const String& cacheKey) {
     xSemaphoreGive(g_coverMux);
 }
 
-/**
- * @brief Befüllt die Prefetch-Queue mit Cover-URLs.
- *
- * @param urls  Array von Cover-URLs.
- * @param keys  Array von Cache-Keys.
- * @param count Anzahl der Einträge.
- */
-void displayQueuePrefetch(const String* urls, const String* keys, int count) {
-    if (count <= 0 || count > SQUEEZE_PREFETCH) return;
 
-    xSemaphoreTake(g_pfMux, portMAX_DELAY);
-    g_pfQueueCount = count;
-    for (int i = 0; i < count; i++) {
-        g_pfQueue[i]     = urls[i];
-        g_pfQueueKeys[i] = keys[i];
-    }
-    TaskHandle_t task = g_pfTask;
-    if (task) {
-        xTaskNotifyGive(task);
-    }
-    xSemaphoreGive(g_pfMux);
-}
