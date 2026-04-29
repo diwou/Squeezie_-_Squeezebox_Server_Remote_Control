@@ -7,6 +7,10 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 ## [Unreleased]
 
 ### Behoben
+- **OTA-Authentifizierung schlug fehl**: `ArduinoOTA.setPassword()` wurde im
+  Code-Review aktiviert, aber die PlatformIO-OTA-Umgebung übergab kein Passwort
+  an den ESP. `upload_flags = --auth=squeezie` in der `[env:…_ota]`-Sektion
+  ergänzt. [`1de559b`]
 - **Cover-Wechsel bei Titelwechsel geblockt**: `displayPreloadCover()` prüfte
   nur auf URL-Identität, nicht auf Cover-Key. Da die aktuelle Cover-URL
   (`/music/current/…`) immer gleich bleibt, wurde jeder Cover-Download nach
