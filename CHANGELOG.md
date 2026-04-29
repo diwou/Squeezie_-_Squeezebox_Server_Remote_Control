@@ -7,6 +7,11 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 ## [Unreleased]
 
 ### Behoben
+- **OTA-Abbruch während Uploads reduziert**: OTA-Callbacks und der Async-Web-
+  Upload zeichnen den Display-Fortschritt nicht mehr direkt. Der Main-Loop
+  übernimmt die Anzeige gedrosselt nur bei Fortschrittsänderungen, damit
+  `ArduinoOTA.handle()` und TCP-Upload-Callbacks nicht durch komplette
+  Display-Redraws ausgebremst werden. [`ota-display-throttle-20260429`]
 - **OTA-Authentifizierung schlug fehl**: `ArduinoOTA.setPassword()` wurde im
   Code-Review aktiviert, aber die PlatformIO-OTA-Umgebung übergab kein Passwort
   an den ESP. `upload_flags = --auth=squeezie` in der `[env:…_ota]`-Sektion

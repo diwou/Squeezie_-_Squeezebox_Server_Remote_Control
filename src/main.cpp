@@ -73,6 +73,7 @@ void loop() {
     static uint32_t bootHoldStart = 0;
     static bool     bootShowing   = false;
     static int      lastOtaPct    = -1;
+    static uint32_t lastOtaDrawAt = 0;
 
     if (digitalRead(PIN_BOOT_BTN) == LOW) {
         if (bootHoldStart == 0) bootHoldStart = millis();
@@ -102,10 +103,13 @@ void loop() {
     if (wifiIsOtaActive()) {
         if (otaPct < 0) otaPct = max(0, lastOtaPct);
         if (otaPct < 0) otaPct = 0;
-        if (otaDirty || otaPct != lastOtaPct) {
+        uint32_t now = millis();
+        bool mayDraw = otaPct >= 100 || lastOtaPct < 0 || now - lastOtaDrawAt >= 250;
+        if ((otaDirty || otaPct != lastOtaPct) && mayDraw) {
             lastOtaPct = otaPct;
+            lastOtaDrawAt = now;
+            displayShowOTA(otaPct);
         }
-        displayShowOTA(otaPct);
         esp_task_wdt_reset();  // Watchdog vor OTA-Delay feeden
         if (otaPct < 100) {
             delay(40);

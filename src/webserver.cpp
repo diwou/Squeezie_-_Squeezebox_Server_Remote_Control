@@ -47,7 +47,7 @@ static SqueezieStatus   g_status;
 static SemaphoreHandle_t g_statusMux   = nullptr; // schützt g_status (Core0↔Core1)
 static volatile bool     g_forceRepoll = false;   // sofortiger Re-Poll nach Steuerbefehl
 static volatile bool     g_otaActive   = false;   // lmsPoll + Cover-DL pausieren während OTA
-static int               g_lastOtaPct  = -1;      // Throttle: Display nur bei %-Änderung
+static int               g_lastOtaPct  = -1;      // Throttle: UI-Status nur bei %-Änderung
 static volatile int      g_otaUiPct    = -1;      // OTA-Fortschritt, Anzeige im main loop
 static volatile bool     g_otaUiDirty  = false;   // OTA-Screen im main loop sicher neu zeichnen
 static int               g_otaError    = 0;       // letzter OTA-Fehlercode
@@ -1209,11 +1209,11 @@ static void setupRoutes() {
                 g_otaUiDirty = true;
                 g_otaError   = 0;
                 srvLog("[OTA] %s", filename.c_str());
-                displayShowOTA(0);
                 size_t otaSize = req->contentLength() > 0 ? req->contentLength() : UPDATE_SIZE_UNKNOWN;
                 if (!Update.begin(otaSize, U_FLASH)) {
                     g_otaError = Update.getError();
                     g_otaActive = false;
+                    g_otaUiPct = -1;
                     srvLog("[OTA] Begin fehlgeschlagen: err=%d", g_otaError);
                 }
             }
@@ -1222,6 +1222,7 @@ static void setupRoutes() {
                 if (written != len) {
                     g_otaError = Update.getError();
                     g_otaActive = false;
+                    g_otaUiPct = -1;
                     srvLog("[OTA] Write fehlgeschlagen: %u/%u err=%d",
                            (unsigned)written, (unsigned)len, g_otaError);
                 }
@@ -1231,7 +1232,6 @@ static void setupRoutes() {
                         g_lastOtaPct = pct;
                         g_otaUiPct = pct;
                         g_otaUiDirty = true;
-                        displayShowOTA(pct);
                     }
                 }
             }
@@ -1241,10 +1241,10 @@ static void setupRoutes() {
                     g_otaActive = false;
                     g_otaUiPct = 100;
                     g_otaUiDirty = true;
-                    displayShowOTA(100);
                 } else {
                     g_otaError = Update.getError();
                     g_otaActive = false;
+                    g_otaUiPct = -1;
                     g_otaUiDirty = true;
                     srvLog("[OTA] Fehler beim Abschluss: err=%d", g_otaError);
                 }
@@ -1274,15 +1274,22 @@ void webserverInit() {
     if (g_wifiState == WIFI_STATE_CONNECTED) {
         ArduinoOTA.setHostname(OTA_HOSTNAME);
         ArduinoOTA.setPassword(OTA_PASSWORD);
+        ArduinoOTA.onStart([]() {
+            g_otaActive = true;
+            g_lastOtaPct = -1;
+            g_otaUiPct = 0;
+            g_otaUiDirty = true;
+            g_otaError = 0;
+            srvLog("[OTA] ArduinoOTA gestartet.");
+        });
         ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
             g_otaActive = true;
             if (total > 0) {
                 int pct = (int)(progress * 100 / total);
-                g_otaUiPct = pct;
-                g_otaUiDirty = true;
                 if (pct != g_lastOtaPct) {
                     g_lastOtaPct = pct;
-                    displayShowOTA(pct);
+                    g_otaUiPct = pct;
+                    g_otaUiDirty = true;
                 }
             }
         });
@@ -1291,10 +1298,10 @@ void webserverInit() {
             g_otaUiDirty = true;
             g_otaActive = false;
             g_lastOtaPct = -1;
-            displayShowOTA(100);
         });
         ArduinoOTA.onError([](ota_error_t error) {
             g_otaError = (int)error;
+            g_otaUiPct = -1;
             g_otaUiDirty = true;
             g_otaActive = false;
             srvLog("[OTA] ArduinoOTA-Fehler: err=%d", g_otaError);
