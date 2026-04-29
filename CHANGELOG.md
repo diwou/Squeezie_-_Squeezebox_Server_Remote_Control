@@ -7,6 +7,18 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 ## [Unreleased]
 
 ### Behoben
+- **ArduinoOTA durch Watchdog-Reset abgebrochen**: `ArduinoOTA.handle()` führt
+  den TCP-Transfer blockierend im `loop()`-Task aus. Da dieser Task seit den
+  Code-Review-Änderungen beim HW-Watchdog angemeldet war, konnte er während
+  des Uploads nicht feeden und das Gerät startete mitten im OTA neu. Der
+  `loop()`-Task wird für ArduinoOTA-Transfers jetzt vom Watchdog abgemeldet
+  und bei Fehlern wieder angemeldet. [`ota-watchdog-20260429`]
+- **Firmware-Export legte ELF als `firmware.bin` ab**: `export_firmware.py`
+  verwendete im PlatformIO-Post-Action-Callback fälschlich `source[0]` statt
+  `target[0]`. Dadurch wurde die große ELF-Datei nach `Firmware/latest/` kopiert,
+  was Web-OTA-Uploads nach einem Teiltransfer abbrechen ließ. Zusätzlich lehnt
+  Web-OTA Dateien ohne ESP32-Image-Magic künftig sofort ab.
+  [`ota-export-bin-20260429`]
 - **OTA-Abbruch während Uploads reduziert**: OTA-Callbacks und der Async-Web-
   Upload zeichnen den Display-Fortschritt nicht mehr direkt. Der Main-Loop
   übernimmt die Anzeige gedrosselt nur bei Fortschrittsänderungen, damit

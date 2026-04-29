@@ -45,7 +45,7 @@ def build_manifest(version: str):
 def export_firmware(source, target, env):
     project_dir = Path(env["PROJECT_DIR"])
     version = build_version_string(project_dir)
-    firmware_bin = Path(source[0].get_abspath())
+    firmware_bin = Path(target[0].get_abspath())
     build_dir = firmware_bin.parent
 
     framework_dir = Path(env.PioPlatform().get_package_dir("framework-arduinoespressif32"))

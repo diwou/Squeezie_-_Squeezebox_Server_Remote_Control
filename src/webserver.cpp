@@ -51,6 +51,8 @@ static int               g_lastOtaPct  = -1;      // Throttle: UI-Status nur bei
 static volatile int      g_otaUiPct    = -1;      // OTA-Fortschritt, Anzeige im main loop
 static volatile bool     g_otaUiDirty  = false;   // OTA-Screen im main loop sicher neu zeichnen
 static int               g_otaError    = 0;       // letzter OTA-Fehlercode
+static bool              g_otaRejected = false;   // Upload-Datei vor Update.write abgelehnt
+static bool              g_loopWdtPausedForOta = false;
 static uint32_t          g_lastSyncReconcile = 0; // Sync-Volumen nur in Intervallen prüfen
 
 // ─── Konfigurationsstrukturen ────────────────────────────────────────────────
@@ -67,6 +69,22 @@ static NetCfg g_net;
 static SrvCfg g_srv;
 static String g_playlistId;
 static String g_playlistName;
+
+static void pauseLoopWatchdogForOta() {
+    if (g_loopWdtPausedForOta) return;
+    if (esp_task_wdt_delete(nullptr) == ESP_OK) {
+        g_loopWdtPausedForOta = true;
+        srvLog("[OTA] Loop-Watchdog pausiert.");
+    }
+}
+
+static void resumeLoopWatchdogAfterOta() {
+    if (!g_loopWdtPausedForOta) return;
+    if (esp_task_wdt_add(nullptr) == ESP_OK) {
+        g_loopWdtPausedForOta = false;
+        srvLog("[OTA] Loop-Watchdog aktiv.");
+    }
+}
 
 // ─── NVS ─────────────────────────────────────────────────────────────────────
 
@@ -1208,7 +1226,17 @@ static void setupRoutes() {
                 g_otaUiPct   = 0;
                 g_otaUiDirty = true;
                 g_otaError   = 0;
+                g_otaRejected = false;
                 srvLog("[OTA] %s", filename.c_str());
+                if (len == 0 || data[0] != 0xE9) {
+                    g_otaError = UPDATE_ERROR_MAGIC_BYTE;
+                    g_otaActive = false;
+                    g_otaUiPct = -1;
+                    g_otaRejected = true;
+                    srvLog("[OTA] Ungültiges Firmware-Image: Magic=0x%02x",
+                           len > 0 ? data[0] : 0);
+                    return;
+                }
                 size_t otaSize = req->contentLength() > 0 ? req->contentLength() : UPDATE_SIZE_UNKNOWN;
                 if (!Update.begin(otaSize, U_FLASH)) {
                     g_otaError = Update.getError();
@@ -1217,7 +1245,7 @@ static void setupRoutes() {
                     srvLog("[OTA] Begin fehlgeschlagen: err=%d", g_otaError);
                 }
             }
-            if (!Update.hasError()) {
+            if (!g_otaRejected && !Update.hasError()) {
                 size_t written = Update.write(data, len);
                 if (written != len) {
                     g_otaError = Update.getError();
@@ -1280,6 +1308,7 @@ void webserverInit() {
             g_otaUiPct = 0;
             g_otaUiDirty = true;
             g_otaError = 0;
+            pauseLoopWatchdogForOta();
             srvLog("[OTA] ArduinoOTA gestartet.");
         });
         ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
@@ -1304,6 +1333,7 @@ void webserverInit() {
             g_otaUiPct = -1;
             g_otaUiDirty = true;
             g_otaActive = false;
+            resumeLoopWatchdogAfterOta();
             srvLog("[OTA] ArduinoOTA-Fehler: err=%d", g_otaError);
         });
         ArduinoOTA.begin();
