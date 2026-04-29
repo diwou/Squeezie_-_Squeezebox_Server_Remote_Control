@@ -11,16 +11,16 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
   nur auf URL-Identität, nicht auf Cover-Key. Da die aktuelle Cover-URL
   (`/music/current/…`) immer gleich bleibt, wurde jeder Cover-Download nach
   dem ersten Titel ignoriert. Jetzt werden URL und Key gemeinsam verglichen.
-  [`3468014`]
+  [`b25ea32`]
 - **Cover-Anzeige in der Web-Oberfläche**: `displayCopyCover()` prüfte auf
   `g_coverReady`, das bereits `false` ist, sobald der Display-Task das Cover
   verarbeitet hat. Dadurch konnte die `/api/cover`-Route nie ein Cover
-  ausliefern. [`3468014`]
+  ausliefern. [`b25ea32`]
 - **Web-Oberfläche aktualisiert Position träge**: Die Status-API gab die rohe
   LMS-Position zurück, die sich nur bei erfolgreichem LMS-Poll ändert. Bei
   langsamen oder ausfallenden Polls blieb die Anzeige秒lang stehen. Jetzt
   interpoliert auch die Web-API die Position lokal zwischen den Polls,
-  analog zur Display-Logik. [`3468014`]
+  analog zur Display-Logik. [`b25ea32`]
 
 ### Geändert
 - **Prefetch-Mechanismus vollständig entfernt**: Der Prefetch-Mechanismus
@@ -28,7 +28,7 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
   wurde komplett ausgebaut, da er wiederholt Probleme mit konkurrierenden
   HTTP-Downloads und Task-Interferenzen verursachte. Der LMS-Poll fragt
   nur noch den aktuellen Titel ab (statt `SQUEEZE_PREFETCH+1` Einträge).
-  [`3468014`]
+  [`b25ea32`]
 - **Code-Review-Punkte umgesetzt**: diverse Verbesserungen aus dem systematischen
   Code-Review – siehe Einzelauflistung unten. [`code-review-20260429`]
 
