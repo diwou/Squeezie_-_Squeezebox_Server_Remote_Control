@@ -31,7 +31,7 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
   eingeführte persistente Notification-Task verursachte Latenzen von 8–10 s
   beim Cover-Laden und 2–3 s beim Titelwechsel. `displayPreloadCover()` erzeugt
   jetzt wieder einen eigenen FreeRTOS-Task pro Download (`xTaskCreatePinnedToCore`),
-  der nach der Übertragung terminiert (`vTaskDelete`). [`REPLACE_WITH_HASH`]
+  der nach der Übertragung terminiert (`vTaskDelete`). [`73c2752`]
 - **Prefetch-Mechanismus vollständig entfernt**: Der Prefetch-Mechanismus
   (`prefetchTask`, `displayQueuePrefetch()`, Prefetch-Slots, PSRAM-Puffer)
   wurde komplett ausgebaut, da er wiederholt Probleme mit konkurrierenden
