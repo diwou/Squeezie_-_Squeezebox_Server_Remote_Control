@@ -1243,6 +1243,7 @@ static void setupRoutes() {
                 g_otaError   = 0;
                 g_otaRejected = false;
                 srvLog("[OTA] %s", filename.c_str());
+                displayShowOTA(0);
                 if (len == 0 || data[0] != 0xE9) {
                     g_otaError = UPDATE_ERROR_MAGIC_BYTE;
                     g_otaActive = false;
@@ -1275,6 +1276,7 @@ static void setupRoutes() {
                         g_lastOtaPct = pct;
                         g_otaUiPct = pct;
                         g_otaUiDirty = true;
+                        displayShowOTA(pct);
                     }
                 }
             }
@@ -1284,6 +1286,7 @@ static void setupRoutes() {
                     g_otaActive = false;
                     g_otaUiPct = 100;
                     g_otaUiDirty = true;
+                    displayShowOTA(100);
                 } else {
                     g_otaError = Update.getError();
                     g_otaActive = false;
@@ -1324,6 +1327,7 @@ void webserverInit() {
             g_otaUiDirty = true;
             g_otaError = 0;
             pauseLoopWatchdogForOta();
+            displayShowOTA(0);
             srvLog("[OTA] ArduinoOTA gestartet.");
         });
         ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
@@ -1334,6 +1338,7 @@ void webserverInit() {
                     g_lastOtaPct = pct;
                     g_otaUiPct = pct;
                     g_otaUiDirty = true;
+                    displayShowOTA(pct);
                 }
             }
         });
@@ -1342,6 +1347,7 @@ void webserverInit() {
             g_otaUiDirty = true;
             g_otaActive = false;
             g_lastOtaPct = -1;
+            displayShowOTA(100);
         });
         ArduinoOTA.onError([](ota_error_t error) {
             g_otaError = (int)error;
