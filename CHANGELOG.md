@@ -7,6 +7,11 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 ## [Unreleased]
 
 ### Behoben
+- **Display-Cover kamen zu langsam**: der Statuspfad nutzte wieder den
+  originalen Cover-Download für das Display. Jetzt wird das Cover wieder
+  direkt über die stabile `coverid` als `cover_128x128_f.jpg` geladen, damit
+  es auf dem TFT sofort erscheint statt erst über den langsamen Originalpfad.
+  [`59dc7af`]
 - **Sonderzeichen im Display lesbar gemacht**: Titel, Artist und Album werden
   für die Display-Ausgabe jetzt über den vorhandenen UTF-8-Fallback normalisiert.
   Dadurch erscheinen Zeichen wie `İ` nicht mehr als Platzhalter-Quadrat auf dem
