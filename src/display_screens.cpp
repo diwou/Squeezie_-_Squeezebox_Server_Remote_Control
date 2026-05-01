@@ -260,7 +260,7 @@ void displayShowOTA(int pct) {
     char pctStr[8];
     snprintf(pctStr, sizeof(pctStr), "%d%%", pct);
     tw = tft.textWidth(pctStr);
-    tft.setCursor((DISPLAY_WIDTH - tw) / 2, barY + barH + 10);
+    tft.setCursor((DISPLAY_WIDTH - tw) / 2, barY + barH + 22);
     tft.print(pctStr);
 
     if (pct >= 100) {
@@ -268,7 +268,7 @@ void displayShowOTA(int pct) {
         tft.setTextColor(COL_YELLOW, COL_BG);
         const char* msg = "Neustart...";
         tw = tft.textWidth(msg);
-        tft.setCursor((DISPLAY_WIDTH - tw) / 2, barY + barH + 40);
+        tft.setCursor((DISPLAY_WIDTH - tw) / 2, barY + barH + 52);
         tft.print(msg);
     }
 }

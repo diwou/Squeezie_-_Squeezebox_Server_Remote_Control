@@ -806,7 +806,7 @@ static String browserCoverUrl(uint32_t coverV) {
     if (g_srv.host.isEmpty() || g_srv.playerMac.isEmpty()) return "";
     String url = "http://" + g_srv.host + ":" + String(g_srv.port)
                + "/music/current/cover_512x512_o.jpg?player=" + g_srv.playerMac;
-    url += "&v=" + String(coverV);
+    url += "#v=" + String(coverV);
     return url;
 }
 
