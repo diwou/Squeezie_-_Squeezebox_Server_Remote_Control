@@ -11,7 +11,7 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
   baut die 512er-Cover-URL jetzt aus dem gecachten Status auf und ersetzt die
   Platzhalter direkt beim Rendern. Dadurch steht die Bildquelle schon im
   Quelltext der Seite und der Browser muss nicht erst auf eine spätere
-  Status-Aktualisierung warten. [`75b5e8f`]
+  Status-Aktualisierung warten. [`b8768af`]
 - **Browser-Cover direkt auf 512x512 festgezogen**: die Web-Status-API liefert
   jetzt wieder dieselbe direkte LMS-URL wie der manuell getestete Pfad, nur
   für `cover_512x512_o.jpg`. Das Frontend liest nur noch dieses eine Feld und
