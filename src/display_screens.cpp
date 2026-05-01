@@ -112,9 +112,9 @@ void displayUpdatePlayer() {
         g_dTitle  = st.title;
         g_dArtist = st.artist;
         g_dAlbum  = st.album;
-        g_dTitleD = st.title;
-        g_dArtistD = st.artist;
-        g_dAlbumD  = st.album;
+        g_dTitleD  = utf8ToAscii(st.title);
+        g_dArtistD = utf8ToAscii(st.artist);
+        g_dAlbumD  = utf8ToAscii(st.album);
     }
 
     // Textbreiten cachen — nur bei Titelwechsel neu messen

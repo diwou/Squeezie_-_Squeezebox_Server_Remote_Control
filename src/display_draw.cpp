@@ -226,6 +226,8 @@ String utf8ToAscii(const String& src) {
             else if (cp >= 0xF2 && cp <= 0xF8) s = "o";
             else if (cp >= 0xF9 && cp <= 0xFC) s = "u";
             else if (cp >= 0xFD && cp <= 0xFF) s = "y";
+            else if (cp == 0x130)              s = "I";
+            else if (cp == 0x131)              s = "i";
             out += s; continue;
         }
         if ((b & 0xF0) == 0xE0 && p[1] && p[2]) {
