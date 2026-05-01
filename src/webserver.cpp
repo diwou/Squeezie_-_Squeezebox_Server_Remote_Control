@@ -6,6 +6,7 @@
 #include <esp_wifi.h>
 #include <DNSServer.h>
 #include <ESPAsyncWebServer.h>
+#include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <Preferences.h>
 #include <Update.h>
@@ -803,11 +804,8 @@ static int interpolatePosition(const SqueezieStatus& s) {
 }
 
 static String browserCoverUrl(uint32_t coverV) {
-    if (g_srv.host.isEmpty() || g_srv.playerMac.isEmpty()) return "";
-    String url = "http://" + g_srv.host + ":" + String(g_srv.port)
-               + "/music/current/cover_512x512_o.jpg?player=" + g_srv.playerMac;
-    url += "&v=" + String(coverV);
-    return url;
+    if (g_srv.playerMac.isEmpty()) return "";
+    return "/api/cover-web?v=" + String(coverV);
 }
 
 static String statusToJson() {
@@ -985,6 +983,49 @@ static void setupRoutes() {
         AsyncResponseStream* res = req->beginResponseStream("image/jpeg");
         res->addHeader("Cache-Control", "no-store");
         res->write(cover.data(), cover.size());
+        req->send(res);
+    });
+
+    server.on("/api/cover-web", HTTP_GET, [](AsyncWebServerRequest* req) {
+        if (g_srv.host.isEmpty() || g_srv.playerMac.isEmpty()) {
+            req->send(204, "image/jpeg", "");
+            return;
+        }
+        String url = "http://" + g_srv.host + ":" + String(g_srv.port)
+                   + "/music/current/cover_512x512_o.jpg?player=" + g_srv.playerMac;
+        HTTPClient http;
+        if (!http.begin(url)) {
+            req->send(204, "image/jpeg", "");
+            return;
+        }
+        http.setTimeout(2500);
+        int code = http.GET();
+        if (code != 200) {
+            http.end();
+            req->send(204, "image/jpeg", "");
+            return;
+        }
+        WiFiClient* stream = http.getStreamPtr();
+        if (!stream) {
+            http.end();
+            req->send(204, "image/jpeg", "");
+            return;
+        }
+        AsyncResponseStream* res = req->beginResponseStream("image/jpeg");
+        res->addHeader("Cache-Control", "no-store");
+        uint8_t buf[1024];
+        while (http.connected()) {
+            size_t avail = stream->available();
+            if (!avail) {
+                if (!stream->connected()) break;
+                delay(1);
+                continue;
+            }
+            size_t len = stream->readBytes(buf, min(sizeof(buf), avail));
+            if (len == 0) break;
+            res->write(buf, len);
+        }
+        http.end();
         req->send(res);
     });
 
