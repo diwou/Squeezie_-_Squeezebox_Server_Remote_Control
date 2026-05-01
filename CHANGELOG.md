@@ -7,6 +7,10 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 ## [Unreleased]
 
 ### Behoben
+- **Browser-Cover wird wieder direkt im `<img>` gesetzt**: der Browser lädt
+  das 512er-Cover erneut direkt aus dem HTML-`src`-Attribut, statt es erst per
+  Script nachzuladen. Der Poll-Reset bleibt stabilisiert, damit die erste
+  Status-Aktualisierung das Bild nicht wieder zurücksetzt. [`91f43f4`]
 - **Browser startete das Cover nicht zuverlässig aus dem HTML heraus**: die
   Weboberfläche setzt die Cover-URL jetzt erst nach dem Registrieren der
   `load`/`error`-Handler per JavaScript und stößt das Laden aktiv an. Damit
