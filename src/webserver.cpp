@@ -318,8 +318,8 @@ body{display:flex;flex-direction:column;min-height:100vh;max-width:560px;margin:
 #cover-wrap{position:relative;width:min(100%,512px);aspect-ratio:1/1;
   margin:0 auto 20px;background:#1a1a1a;border-radius:14px;overflow:hidden}
 #ci,#ci-ph{position:absolute;inset:0;width:100%;height:100%}
-#ci{object-fit:cover;display:block;box-shadow:0 6px 24px rgba(0,0,0,.7)}
-#ci-ph{display:flex;align-items:center;justify-content:center;opacity:.25}
+#ci{object-fit:cover;display:block;z-index:1;box-shadow:0 6px 24px rgba(0,0,0,.7)}
+#ci-ph{display:flex;align-items:center;justify-content:center;opacity:.25;z-index:0;pointer-events:none}
 #ttl{font-size:1.5em;font-weight:700;color:#f0f0f0;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:8px}
 #art{color:#00c853;font-size:1.2em;white-space:nowrap;overflow:hidden;
