@@ -7,6 +7,9 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 ## [Unreleased]
 
 ### Behoben
+- **Browser-Cover lag hinter dem Platzhalter**: das `<img>` bekommt jetzt
+  einen höheren `z-index` als das SVG, damit das geladene 512er-Cover nicht
+  mehr vom Platzhalter überdeckt wird. [`121ffb6`]
 - **Browser-Cover war im Layout nicht als Overlay aufgebaut**: der Cover-
   Platzhalter und das Bild liegen jetzt absolut übereinander in einer
   einzigen Fläche. Damit kann das 512er-Bild nicht mehr neben dem SVG-
