@@ -7,10 +7,11 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 ## [Unreleased]
 
 ### Behoben
-- **Browser-Cover wieder direkt vom LMS geladen**: die Web-Oberfläche nutzt
-  wieder die getestete direkte `cover_512x512_o.jpg`-URL aus dem LMS und
-  zieht den Cache-Buster nur als Query-Parameter an. Die Cover-Fläche im
-  Browser ist auf 512px erweitert, das Display bleibt bei 128px. [`d5af07b`]
+- **Browser-Cover per Redirect stabilisiert**: `/api/cover-web` lenkt den
+  Browser jetzt per 302 direkt auf die 512x512-Cover-URL im LMS, statt das Bild
+  selbst zu übertragen. Dadurch bleibt der Browser im Gerät, aber der
+  Bildtransfer läuft extern. Die Cover-Fläche bleibt auf 512px erweitert.
+  [`8c595ee`]
 - **OTA-Prozentanzeige saß zu hoch**: die Prozentzahl und der Neustart-Hinweis
   werden im OTA-Screen jetzt etwas tiefer unter dem Ladebalken gezeichnet,
   damit sie nicht mehr mittig im Balken stehen. [`8376b83`]
