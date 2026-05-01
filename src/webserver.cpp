@@ -367,7 +367,7 @@ body{display:flex;flex-direction:column;min-height:100vh;max-width:560px;margin:
 <div id=notice></div>
 <div id=content>
   <div id=cover-wrap>
-    <img id=ci src="" alt="" style=display:none
+    <img id=ci src="__COVER_URL__" alt="" style=display:none
       onload="this.style.display='block';document.getElementById('ci-ph').style.display='none'"
       onerror="this.style.display='none';document.getElementById('ci-ph').style.display='block'">
     <svg id=ci-ph viewBox="0 0 24 24" style=display:block>
@@ -829,7 +829,7 @@ static String statusToJson() {
     doc["repeatMode"] = s.repeatMode;
     doc["shuffleMode"]= s.shuffleMode;
     doc["playerName"] = s.playerName;
-    doc["coverUrl"]   = s.coverUrl.isEmpty() ? "" : browserCoverUrl(coverV);
+    doc["coverUrl"]   = browserCoverUrl(coverV);
     doc["connected"]  = (g_wifiState == WIFI_STATE_CONNECTED);
     String out; serializeJson(doc, out);
     return out;
@@ -935,9 +935,12 @@ bool wifiIsOtaActive() {
 // Mehrteilige Seite zusammensetzen und mit Cache-Control senden
 static void sendPage(AsyncWebServerRequest* req,
                      const char* part1, const char* css,
-                     const char* part2, const char* part3) {
+                     const char* part2, const char* part3,
+                     const String& coverUrl = "") {
     String page = String(FPSTR(part1)) + String(FPSTR(css)) + String(FPSTR(part2));
     if (part3) page += String(FPSTR(part3));
+    if (!coverUrl.isEmpty()) page.replace("__COVER_URL__", coverUrl);
+    else page.replace("__COVER_URL__", "");
     AsyncWebServerResponse* res = req->beginResponse(200, "text/html; charset=UTF-8", page);
     res->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res->addHeader("Pragma", "no-cache");
@@ -964,7 +967,8 @@ static void setupRoutes() {
         if (g_wifiState == WIFI_STATE_AP)
             sendPage(req, PAGE_AP, CSS_COMMON, PAGE_AP2, nullptr);
         else
-            sendPage(req, PAGE_MAIN, CSS_COMMON, PAGE_MAIN2, nullptr);
+            sendPage(req, PAGE_MAIN, CSS_COMMON, PAGE_MAIN2, nullptr,
+                     browserCoverUrl(displayGetCoverSerial()));
     });
 
     server.on("/settings", HTTP_GET, [](AsyncWebServerRequest* req) {
