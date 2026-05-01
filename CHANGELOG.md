@@ -7,6 +7,15 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 ## [Unreleased]
 
 ### Behoben
+- **Browser startete das Cover nicht zuverlässig aus dem HTML heraus**: die
+  Weboberfläche setzt die Cover-URL jetzt erst nach dem Registrieren der
+  `load`/`error`-Handler per JavaScript und stößt das Laden aktiv an. Damit
+  fällt die Race Condition zwischen initialem Rendern und Bild-Load weg.
+  [`1c482e6`]
+- **Browser setzte die Cover-URL beim ersten Poll wieder zurück**: `prevCover`
+  startet jetzt mit der initial gerenderten 512er-URL, damit die erste
+  Status-Aktualisierung das bereits geladene Bild nicht mehr wieder auf den
+  Platzhalter zurücksetzt. [`8589f29`]
 - **Browser-Cover wurde wegen `display:none` nicht geladen**: das Bild wird
   im Webbrowser jetzt als sichtbares Element mit `opacity:0` initialisiert
   und erst nach `onload` eingeblendet. So lädt der Browser das Cover auch
