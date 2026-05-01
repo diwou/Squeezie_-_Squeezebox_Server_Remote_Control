@@ -7,14 +7,13 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 ## [Unreleased]
 
 ### Behoben
-- **Browser-Cover per lokalem Proxy stabilisiert**: die Web-Oberfläche lädt
-  das 512x512-Cover jetzt über `/api/cover-web` vom Gerät selbst. Damit bleibt
-  der Browser auf derselben Origin, während das Display weiterhin sein eigenes
-  128er Cover nutzt. Gleichzeitig wurde die Cover-Fläche auf 512px erweitert.
-  [`ad36454`]
+- **Browser-Cover wieder direkt vom LMS geladen**: die Web-Oberfläche nutzt
+  wieder die getestete direkte `cover_512x512_o.jpg`-URL aus dem LMS und
+  zieht den Cache-Buster nur als Query-Parameter an. Die Cover-Fläche im
+  Browser ist auf 512px erweitert, das Display bleibt bei 128px. [`d5af07b`]
 - **OTA-Prozentanzeige saß zu hoch**: die Prozentzahl und der Neustart-Hinweis
   werden im OTA-Screen jetzt etwas tiefer unter dem Ladebalken gezeichnet,
-  damit sie nicht mehr mitten im Balken stehen. [`8376b83`]
+  damit sie nicht mehr mittig im Balken stehen. [`8376b83`]
 - **Lautstärke-Buttons fehlten auf dem Display**: der Player-Screen zeichnete
   nur noch die Lautstärkeanzeige, aber nicht mehr die Minus-, Plus- und Mute-
   Buttons. Die Buttons werden jetzt wieder beim Screen-Aufbau und bei
