@@ -316,10 +316,9 @@ body{display:flex;flex-direction:column;min-height:100vh;max-width:560px;margin:
   font-size:1em;text-align:center;flex-shrink:0;border-bottom:1px solid #5a3000}
 #content{flex:1;overflow-y:auto;padding:16px 18px 100px}
 #cover-wrap{position:relative;width:min(100%,512px);aspect-ratio:1/1;
-  margin:0 auto 20px;background:#1a1a1a;border-radius:14px;overflow:hidden}
-#ci,#ci-ph{position:absolute;inset:0;width:100%;height:100%}
-#ci{object-fit:cover;display:block;z-index:1;box-shadow:0 6px 24px rgba(0,0,0,.7)}
-#ci-ph{display:flex;align-items:center;justify-content:center;opacity:.25;z-index:0;pointer-events:none}
+  margin:0 auto 20px;background-color:#1a1a1a;background-position:center center;
+  background-size:cover;background-repeat:no-repeat;border-radius:14px;overflow:hidden;
+  box-shadow:0 6px 24px rgba(0,0,0,.7)}
 #ttl{font-size:1.5em;font-weight:700;color:#f0f0f0;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:8px}
 #art{color:#00c853;font-size:1.2em;white-space:nowrap;overflow:hidden;
@@ -366,14 +365,7 @@ body{display:flex;flex-direction:column;min-height:100vh;max-width:560px;margin:
 </div>
 <div id=notice></div>
 <div id=content>
-  <div id=cover-wrap>
-    <img id=ci src="__COVER_URL__" alt=""
-      onload="this.style.opacity='1';document.getElementById('ci-ph').style.display='none'"
-      onerror="this.style.opacity='0';document.getElementById('ci-ph').style.display='block'">
-    <svg id=ci-ph viewBox="0 0 24 24">
-      <path fill="#fff" d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3z"/>
-    </svg>
-  </div>
+  <div id=cover-wrap style="background-image:url('__COVER_URL__')"></div>
   <div id=ttl>&mdash;</div>
   <div id=art></div>
   <div id=alb></div>
@@ -475,16 +467,7 @@ function upd(d){
   var cover=d.coverUrl||'';
   if(cover!==prevCover){
     prevCover=cover;
-    var ci=document.getElementById('ci');
-    if(cover){
-      ci.style.opacity='0';
-      document.getElementById('ci-ph').style.display='block';
-      ci.src=cover;
-    } else {
-      ci.style.opacity='0';
-      ci.removeAttribute('src');
-      document.getElementById('ci-ph').style.display='block';
-    }
+    document.getElementById('cover-wrap').style.backgroundImage = cover ? 'url("'+cover+'")' : 'none';
   }
   cls('brp','mode-btn'+(d.repeatMode?' on':''));
   txt('rpt-lbl',RPT[d.repeatMode||0]);
