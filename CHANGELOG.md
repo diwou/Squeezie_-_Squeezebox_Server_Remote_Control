@@ -7,6 +7,10 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 ## [Unreleased]
 
 ### Behoben
+- **Browser-Cover war im Layout nicht als Overlay aufgebaut**: der Cover-
+  Platzhalter und das Bild liegen jetzt absolut übereinander in einer
+  einzigen Fläche. Damit kann das 512er-Bild nicht mehr neben dem SVG-
+  Platzhalter verschwinden. [`452f35d`]
 - **Browser-Cover wird wieder direkt im `<img>` gesetzt**: der Browser lädt
   das 512er-Cover erneut direkt aus dem HTML-`src`-Attribut, statt es erst per
   Script nachzuladen. Der Poll-Reset bleibt stabilisiert, damit die erste
