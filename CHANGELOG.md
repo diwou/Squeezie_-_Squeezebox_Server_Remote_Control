@@ -7,6 +7,11 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 ## [Unreleased]
 
 ### Behoben
+- **Sonderzeichen im Display lesbar gemacht**: Titel, Artist und Album werden
+  für die Display-Ausgabe jetzt über den vorhandenen UTF-8-Fallback normalisiert.
+  Dadurch erscheinen Zeichen wie `İ` nicht mehr als Platzhalter-Quadrat auf dem
+  TFT, während das Webinterface den Originaltext weiter direkt anzeigt.
+  [`b0d6e6c`]
 - **OTA-Anzeige wieder sofort gezeichnet**: der Fortschritt wird im
   OTA-Start, bei Progress und beim Abschluss wieder direkt auf dem Display
   gezeigt, statt nur noch gedrosselt über den Main-Loop nachzulaufen.
