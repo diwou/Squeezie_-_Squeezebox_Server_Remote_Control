@@ -803,11 +803,8 @@ static int interpolatePosition(const SqueezieStatus& s) {
 }
 
 static String browserCoverUrl(uint32_t coverV) {
-    if (g_srv.host.isEmpty() || g_srv.playerMac.isEmpty()) return "";
-    String url = "http://" + g_srv.host + ":" + String(g_srv.port)
-               + "/music/current/cover_512x512_o.jpg?player=" + g_srv.playerMac;
-    url += "&v=" + String(coverV);
-    return url;
+    if (g_srv.playerMac.isEmpty()) return "";
+    return "/api/cover-web?v=" + String(coverV);
 }
 
 static String statusToJson() {
@@ -985,6 +982,20 @@ static void setupRoutes() {
         AsyncResponseStream* res = req->beginResponseStream("image/jpeg");
         res->addHeader("Cache-Control", "no-store");
         res->write(cover.data(), cover.size());
+        req->send(res);
+    });
+
+    server.on("/api/cover-web", HTTP_GET, [](AsyncWebServerRequest* req) {
+        if (g_srv.host.isEmpty() || g_srv.playerMac.isEmpty()) {
+            req->send(204, "text/plain", "");
+            return;
+        }
+        String url = "http://" + g_srv.host + ":" + String(g_srv.port)
+                   + "/music/current/cover_512x512_o.jpg?player=" + g_srv.playerMac;
+        if (req->hasParam("v")) url += "&v=" + req->getParam("v")->value();
+        AsyncWebServerResponse* res = req->beginResponse(302);
+        res->addHeader("Location", url);
+        res->addHeader("Cache-Control", "no-store");
         req->send(res);
     });
 
