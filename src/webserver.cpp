@@ -367,9 +367,7 @@ body{display:flex;flex-direction:column;min-height:100vh;max-width:560px;margin:
 <div id=notice></div>
 <div id=content>
   <div id=cover-wrap>
-    <img id=ci src="__COVER_URL__" alt="" style="display:block;opacity:0"
-      onload="this.style.opacity='1';document.getElementById('ci-ph').style.display='none'"
-      onerror="this.style.opacity='0';document.getElementById('ci-ph').style.display='block'">
+    <img id=ci src="" alt="" style="display:block;opacity:0">
     <svg id=ci-ph viewBox="0 0 24 24" style=display:block>
       <path fill="#fff" d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3z"/>
     </svg>
@@ -428,7 +426,7 @@ body{display:flex;flex-direction:column;min-height:100vh;max-width:560px;margin:
   </a>
 </nav>
 <script>
-var dur=0,prevCover='__COVER_URL__',volTimer=null,volMuted=false;
+var dur=0,initialCover='__COVER_URL__',prevCover='__COVER_URL__',volTimer=null,volMuted=false;
 var RPT=['Wiederholen: aus','Wiederholen: Titel','Wiederholen: Playlist'];
 var SHF=['Zufall: aus','Zufall: Titel','Zufall: Alben'];
 function fmt(s){s=Math.round(s);return Math.floor(s/60)+':'+(s%60<10?'0':'')+s%60;}
@@ -436,6 +434,28 @@ function txt(id,val){var e=document.getElementById(id);if(e&&e.textContent!==val
 function cls(id,val){var e=document.getElementById(id);if(e&&e.className!==val)e.className=val;}
 function vis(id,show){var e=document.getElementById(id);if(e)e.style.display=show?'':'none';}
 function dis(id,disabled){var e=document.getElementById(id);if(e)e.disabled=disabled;}
+function initCover(){
+  var ci=document.getElementById('ci');
+  var ph=document.getElementById('ci-ph');
+  if(!ci||!ph)return;
+  ci.addEventListener('load',function(){
+    this.style.opacity='1';
+    ph.style.display='none';
+  });
+  ci.addEventListener('error',function(){
+    this.style.opacity='0';
+    ph.style.display='block';
+  });
+  if(initialCover){
+    ci.src=initialCover;
+    if(ci.complete&&ci.naturalWidth>0){
+      ci.style.opacity='1';
+      ph.style.display='none';
+    }
+  } else {
+    ph.style.display='block';
+  }
+}
 function upd(d){
   if(!d)return;
   var ntc=document.getElementById('notice');
@@ -520,6 +540,7 @@ function seek(e){
   var r=e.currentTarget.getBoundingClientRect();
   c('seek:'+(Math.round((e.clientX-r.left)/r.width*dur)));
 }
+initCover();
 setInterval(poll,200);poll();
 </script></body></html>
 )HTML";
