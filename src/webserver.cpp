@@ -367,9 +367,9 @@ body{display:flex;flex-direction:column;min-height:100vh;max-width:560px;margin:
 <div id=notice></div>
 <div id=content>
   <div id=cover-wrap>
-    <img id=ci src="__COVER_URL__" alt="" style=display:none
-      onload="this.style.display='block';document.getElementById('ci-ph').style.display='none'"
-      onerror="this.style.display='none';document.getElementById('ci-ph').style.display='block'">
+    <img id=ci src="__COVER_URL__" alt="" style="display:block;opacity:0"
+      onload="this.style.opacity='1';document.getElementById('ci-ph').style.display='none'"
+      onerror="this.style.opacity='0';document.getElementById('ci-ph').style.display='block'">
     <svg id=ci-ph viewBox="0 0 24 24" style=display:block>
       <path fill="#fff" d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3z"/>
     </svg>
@@ -477,11 +477,11 @@ function upd(d){
     prevCover=cover;
     var ci=document.getElementById('ci');
     if(cover){
-      ci.style.display='none';
+      ci.style.opacity='0';
       document.getElementById('ci-ph').style.display='block';
       ci.src=cover;
     } else {
-      ci.style.display='none';
+      ci.style.opacity='0';
       ci.removeAttribute('src');
       document.getElementById('ci-ph').style.display='block';
     }
