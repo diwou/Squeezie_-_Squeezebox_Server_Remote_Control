@@ -7,6 +7,10 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 ## [Unreleased]
 
 ### Behoben
+- **Browser-Cover wieder direkt in 512x512 geladen**: die Web-Oberfläche
+  nutzt jetzt eine eigene LMS-URL für das aktuelle Cover und lädt es direkt
+  mit 512x512 aus dem Server, statt das Display-Cover über `/api/cover`
+  mitzubenutzen. Das Display bleibt unverändert bei 128x128. [`8c55109`]
 - **Lautstärke-Buttons fehlten auf dem Display**: der Player-Screen zeichnete
   nur noch die Lautstärkeanzeige, aber nicht mehr die Minus-, Plus- und Mute-
   Buttons. Die Buttons werden jetzt wieder beim Screen-Aufbau und bei
