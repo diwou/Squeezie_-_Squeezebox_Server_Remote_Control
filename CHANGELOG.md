@@ -7,6 +7,10 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 ## [Unreleased]
 
 ### Behoben
+- **Browser-Cover wurde wegen `display:none` nicht geladen**: das Bild wird
+  im Webbrowser jetzt als sichtbares Element mit `opacity:0` initialisiert
+  und erst nach `onload` eingeblendet. So lädt der Browser das Cover auch
+  dann zuverlässig, wenn die Quelle schon im Quelltext steht. [`ddf3221`]
 - **Browser nutzte eine falsche 512er-Cover-URL**: statt der direkt
   funktionierenden `music/current/cover_512x512_o.jpg`-Adresse wurde
   eine aus `coverid` abgeleitete URL gebaut, die im Browser kein Bild lieferte.
