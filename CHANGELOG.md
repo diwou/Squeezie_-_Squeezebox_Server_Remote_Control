@@ -7,6 +7,10 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 ## [Unreleased]
 
 ### Behoben
+- **Browser-Cover wird jetzt als Hintergrundbild geladen**: der 512er-Link
+  steckt direkt im `background-image` des Cover-Containers, statt als
+  separates `<img>` mit Overlay/Load-Events gerendert zu werden.
+  [`987d124`]
 - **Browser-Cover lag hinter dem Platzhalter**: das `<img>` bekommt jetzt
   einen höheren `z-index` als das SVG, damit das geladene 512er-Cover nicht
   mehr vom Platzhalter überdeckt wird. [`121ffb6`]
