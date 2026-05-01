@@ -7,6 +7,10 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 ## [Unreleased]
 
 ### Behoben
+- **OTA-Anzeige wieder sofort gezeichnet**: der Fortschritt wird im
+  OTA-Start, bei Progress und beim Abschluss wieder direkt auf dem Display
+  gezeigt, statt nur noch gedrosselt über den Main-Loop nachzulaufen.
+  [`acdfa20`]
 - **Steuerbefehle reagierten träge**: der LMS-Hintergrund-Poll lief nach den
   Code-Review-Änderungen praktisch dauerhaft und startete zusätzlich sehr häufig
   Sync-Volume-Abgleiche mit weiteren JSON-RPC-Aufrufen. Nutzerbefehle teilen
@@ -15,24 +19,24 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
   Statusabgleich und verschiebt Sync-Reconciliation aus dieser Phase. Der
   periodische Sync-Abgleich läuft außerdem deutlich seltener, weil er je nach
   Gruppe mehrere zusätzliche LMS-Abfragen auslöst.
-  [`control-latency-20260429`]
+  [`03bf25d`]
 - **ArduinoOTA durch Watchdog-Reset abgebrochen**: `ArduinoOTA.handle()` führt
   den TCP-Transfer blockierend im `loop()`-Task aus. Da dieser Task seit den
   Code-Review-Änderungen beim HW-Watchdog angemeldet war, konnte er während
   des Uploads nicht feeden und das Gerät startete mitten im OTA neu. Der
   `loop()`-Task wird für ArduinoOTA-Transfers jetzt vom Watchdog abgemeldet
-  und bei Fehlern wieder angemeldet. [`ota-watchdog-20260429`]
+  und bei Fehlern wieder angemeldet. [`ebcea40`]
 - **Firmware-Export legte ELF als `firmware.bin` ab**: `export_firmware.py`
   verwendete im PlatformIO-Post-Action-Callback fälschlich `source[0]` statt
   `target[0]`. Dadurch wurde die große ELF-Datei nach `Firmware/latest/` kopiert,
   was Web-OTA-Uploads nach einem Teiltransfer abbrechen ließ. Zusätzlich lehnt
   Web-OTA Dateien ohne ESP32-Image-Magic künftig sofort ab.
-  [`ota-export-bin-20260429`]
+  [`ebcea40`]
 - **OTA-Abbruch während Uploads reduziert**: OTA-Callbacks und der Async-Web-
   Upload zeichnen den Display-Fortschritt nicht mehr direkt. Der Main-Loop
   übernimmt die Anzeige gedrosselt nur bei Fortschrittsänderungen, damit
   `ArduinoOTA.handle()` und TCP-Upload-Callbacks nicht durch komplette
-  Display-Redraws ausgebremst werden. [`ota-display-throttle-20260429`]
+  Display-Redraws ausgebremst werden. [`57f5c89`]
 - **OTA-Authentifizierung schlug fehl**: `ArduinoOTA.setPassword()` wurde im
   Code-Review aktiviert, aber die PlatformIO-OTA-Umgebung übergab kein Passwort
   an den ESP. `upload_flags = --auth=squeezie` in der `[env:…_ota]`-Sektion
@@ -65,14 +69,14 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
   nur noch den aktuellen Titel ab (statt `SQUEEZE_PREFETCH+1` Einträge).
   [`b25ea32`]
 - **Code-Review-Punkte umgesetzt**: diverse Verbesserungen aus dem systematischen
-  Code-Review – siehe Einzelauflistung unten. [`code-review-20260429`]
+  Code-Review – siehe Einzelauflistung unten. [`17ecd77`]
 
 ### Hinzugefügt
 - **HW-Watchdog aktiviert**: `esp_task_wdt_init()` in `setup()` initialisiert
   den Watchdog, sodass das Gerät bei Task-Hängern automatisch neu startet.
-  [`code-review-20260429`]
+  [`17ecd77`]
 - **Doxygen-Kommentare zu allen öffentlichen API-Funktionen** in den Headern
-  ergänzt. [`code-review-20260429`]
+  ergänzt. [`17ecd77`]
 
 ### Behoben
 - **Cover-Erholung bei hängenden Downloads stabilisiert**: wenn ein Cover-Download
@@ -80,45 +84,45 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
   Zeit freigegeben und der Cover-Abruf automatisch neu angestoßen, statt das
   gesamte Cover-System bis zum manuellen Reset festzuhalten. Dadurch sollen
   Langzeitläufer wieder Covers anzeigen, auch wenn ein einzelner Download oder
-  eine HTTP-Verbindung im Hintergrund aussteigt. [`cover-retry-20260425`]
+  eine HTTP-Verbindung im Hintergrund aussteigt. [`27a07d3`]
 - **`abs()`-Aufruf in `squeezeVolumeFromLms()` dokumentiert**: die Funktion
   wandelt LMS-Volumen (0–100) ins UI-Format um; der `abs()`-Aufruf behandelt
   negative Werte, die bei JSON-Parsing-Fehlern auftreten können.
-  [`code-review-20260429`]
+  [`17ecd77`]
 - **`String`-Parameter auf `const String&` umgestellt**: in `squeezeapi.cpp`
   und `webserver.cpp` werden String-Parameter jetzt durchgängig als
   konstante Referenz übergeben, um Kopien zu vermeiden.
-  [`code-review-20260429`]
+  [`17ecd77`]
 - **Display-Dimensionen durch `DISPLAY_WIDTH`/`DISPLAY_HEIGHT` ersetzt**:
   hartcodierte 480/320-Werte in `display.cpp` durch die Defines aus
-  `config.h` ausgetauscht. [`code-review-20260429`]
+  `config.h` ausgetauscht. [`17ecd77`]
 - **Leere Platzhalter-Readmes entfernt**: `include/README`, `lib/README` und
   `test/README` waren ohne Inhalt und wurden gelöscht.
-  [`code-review-20260429`]
+  [`17ecd77`]
 - **Kommentar zu `LovyanGFX@1.1.12`-Pinning in `platformio.ini` ergänzt**:
   erklärt, warum die Version festgepinnt ist (SPI-Regression in 1.2.x).
-  [`code-review-20260429`]
+  [`17ecd77`]
 - **`display.cpp` aufgeteilt**: die über 1900 Zeilen große Datei wurde in
   vier Module aufgeteilt: `display_draw.cpp` (Zeichenroutinen),
   `display_touch.cpp` (Touch + Kalibrierung), `display_cover.cpp`
   (Cover-Download + Prefetch + Cache) und `display_screens.cpp`
-  (Screen-Management). [`code-review-20260429`]
+  (Screen-Management). [`17ecd77`]
 - **`generate_compiledb.py`-Implementierung bestätigt**: die Datei enthielt
   bereits eine funktionierende Implementierung (kein `pass`), der
-  Code-Review-Befund war veraltet. [`code-review-20260429`]
+  Code-Review-Befund war veraltet. [`17ecd77`]
 - **OTA-Passwortschutz aktiviert**: `ArduinoOTA.setPassword()` in
   `webserver.cpp` setzt das konfigurierbare Passwort aus `config.h`
   (`OTA_PASSWORD`), sodass OTA-Updates nicht mehr ohne Authentifizierung
-  möglich sind. [`code-review-20260429`]
+  möglich sind. [`17ecd77`]
 - **OTA-Konfiguration in `config.h` zentralisiert**: `OTA_HOSTNAME` und
   `OTA_PASSWORD` sind jetzt als Defines in `config.h` hinterlegt und
-  können dort angepasst werden. [`code-review-20260429`]
+  können dort angepasst werden. [`17ecd77`]
 - **NVS-Kalibrierungsdaten nicht gefunden**: `displayInit()` in
   `display_screens.cpp` verwendete den falschen NVS-Namespace (`"touch"`)
   und Literal-Schlüssel (`"cal_x0"` etc.) statt der Defines aus `config.h`
   (`NVS_NAMESPACE` = `"squeezie"`, `NVS_KEY_CAL_X0` etc.). Dadurch wurden
   gespeicherte Kalibrierungsdaten nicht gefunden und die Kalibrierung bei
-  jedem Start erneut gestartet. [`code-review-20260429`]
+  jedem Start erneut gestartet. [`17ecd77`]
 - **Watchdog-Bootloop nach Code-Review-Änderungen**: der in `main.cpp`
   aktivierte HW-Watchdog (`esp_task_wdt_init(10, true)`) führte zu einem
   Bootloop, weil der Haupt-Task (`loop()`) und der Cover-Download-Task den
@@ -127,7 +131,7 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
   Reset aus. Behoben durch `esp_task_wdt_add(nullptr)` + `esp_task_wdt_reset()`
   zu Beginn jeder `loop()`-Iteration sowie `esp_task_wdt_reset()` während des
   HTTP-Reads in `readHttpBody()` und nach dem HTTP-Download in `coverDlTask()`.
-  [`watchdog-bootloop-20260429`]
+  [`8bb8eaf`]
 - **Titel-/Artist-/Album-Anzeige in `displayUpdatePlayer()` ergänzt**: nach der
   Aufteilung von `display.cpp` fehlte in `display_screens.cpp` der gesamte Block
   zum Zeichnen von Titel (bold, Font 3, weiss), Artist (Font 2, grün) und Album
@@ -180,15 +184,15 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 - **Bedienung reaktionsschneller gemacht**: der LMS-Statusabgleich läuft jetzt in kürzeren
   Abständen und wartet auf Statusantworten nicht mehr so lange, sodass externe Änderungen an
   Lautstärke, Play/Pause, Seek oder Modi schneller auf Display und Webinterface sichtbar
-  werden. [`resp-20260422`]
+  werden. [`a886ed7`]
 - **Lautstärke-Sprünge stabilisiert**: große externe Lautstärkeänderungen werden erst dann in
   die Anzeige übernommen, wenn derselbe Wert zweimal hintereinander vom LMS gemeldet wurde.
   So bleiben Zwischenstände wie 15 oder 17 bei einem Sprung auf 20 nicht mehr dauerhaft im
-  Display hängen. [`vol-sync-20260422`]
+  Display hängen. [`f45bdc3`]
 - **Sync-Player wieder hart synchronisiert**: wenn ein Player in einer Sync-Gruppe extern eine
   Lautstärkeänderung bekommt, wird der gemeldete absolute Wert jetzt auf alle Gruppenmitglieder
   gespiegelt. Dadurch sollen Multiroom-Player nicht mehr auseinanderlaufen, wenn ein Tool einen
-  Einzelplayer kurz vor der anderen Seite aktualisiert. [`sync-abs-20260422`]
+  Einzelplayer kurz vor der anderen Seite aktualisiert. [`96410eb`]
 
 ## [0.4.3] — 2026-04-21
 
