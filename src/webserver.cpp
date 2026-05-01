@@ -315,11 +315,11 @@ body{display:flex;flex-direction:column;min-height:100vh;max-width:560px;margin:
 #notice{display:none;background:#2a1200;color:#ff9500;padding:12px 18px;
   font-size:1em;text-align:center;flex-shrink:0;border-bottom:1px solid #5a3000}
 #content{flex:1;overflow-y:auto;padding:16px 18px 100px}
-#cover-wrap{display:flex;justify-content:center;margin-bottom:20px;min-height:200px;
-  background:#1a1a1a;border-radius:14px;align-items:center}
-#ci{width:196px;height:196px;object-fit:cover;border-radius:12px;
+#cover-wrap{display:flex;justify-content:center;align-items:center;margin:0 auto 20px;
+  width:min(100%,512px);aspect-ratio:1/1;background:#1a1a1a;border-radius:14px}
+#ci{width:100%;height:100%;object-fit:cover;border-radius:12px;
   display:block;box-shadow:0 6px 24px rgba(0,0,0,.7)}
-#ci-ph{width:80px;height:80px;opacity:.25;display:none}
+#ci-ph{width:96px;height:96px;opacity:.25;display:none}
 #ttl{font-size:1.5em;font-weight:700;color:#f0f0f0;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:8px}
 #art{color:#00c853;font-size:1.2em;white-space:nowrap;overflow:hidden;
@@ -806,7 +806,7 @@ static String browserCoverUrl(uint32_t coverV) {
     if (g_srv.host.isEmpty() || g_srv.playerMac.isEmpty()) return "";
     String url = "http://" + g_srv.host + ":" + String(g_srv.port)
                + "/music/current/cover_512x512_o.jpg?player=" + g_srv.playerMac;
-    url += "#v=" + String(coverV);
+    url += "&v=" + String(coverV);
     return url;
 }
 
