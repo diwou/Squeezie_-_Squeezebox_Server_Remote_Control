@@ -472,13 +472,14 @@ function upd(d){
   txt('ds',fmt(dur));
   var pct=dur>0?Math.min(100,Math.round((d.position||0)/dur*1000)/10):0;
   document.getElementById('pb-fill').style.width=pct+'%';
-  if(d.coverUrl!==prevCover){
-    prevCover=d.coverUrl;
+  var cover=d.coverWebUrl||d.coverUrl||'';
+  if(cover!==prevCover){
+    prevCover=cover;
     var ci=document.getElementById('ci');
-    if(d.coverUrl){
+    if(cover){
       ci.style.display='none';
       document.getElementById('ci-ph').style.display='block';
-      ci.src=d.coverUrl;
+      ci.src=cover;
     } else {
       ci.style.display='none';
       ci.removeAttribute('src');
@@ -801,6 +802,14 @@ static int interpolatePosition(const SqueezieStatus& s) {
     return s.position;
 }
 
+static String browserCoverUrl(uint32_t coverV) {
+    if (g_srv.host.isEmpty() || g_srv.playerMac.isEmpty()) return "";
+    String url = "http://" + g_srv.host + ":" + String(g_srv.port)
+               + "/music/current/cover_512x512_o.jpg?player=" + g_srv.playerMac;
+    url += "&v=" + String(coverV);
+    return url;
+}
+
 static String statusToJson() {
     xSemaphoreTake(g_statusMux, portMAX_DELAY);
     SqueezieStatus s = g_status;
@@ -821,6 +830,7 @@ static String statusToJson() {
     doc["shuffleMode"]= s.shuffleMode;
     doc["playerName"] = s.playerName;
     doc["coverUrl"]   = s.coverUrl.isEmpty() ? "" : ("/api/cover?v=" + String(coverV));
+    doc["coverWebUrl"] = s.coverUrl.isEmpty() ? "" : browserCoverUrl(coverV);
     doc["connected"]  = (g_wifiState == WIFI_STATE_CONNECTED);
     String out; serializeJson(doc, out);
     return out;
