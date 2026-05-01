@@ -73,7 +73,7 @@ static String currentCoverUrlForPlayer(const String& playerMac, int size) {
     if (g_host.isEmpty() || playerMac.isEmpty()) return "";
     return "http://" + g_host + ":" + String(g_port)
            + "/music/current/cover_" + String(size) + "x" + String(size)
-           + "_o.jpg?player=" + playerMac;
+           + "_f.jpg?player=" + playerMac;
 }
 
 static String trackKey(JsonObjectConst track) {
@@ -222,8 +222,10 @@ bool squeezeGetStatus(const String& playerMac, SqueezieStatus& out) {
         out.album     = t["album"].as<String>();
         out.trackNum  = t["tracknum"].as<int>();
         out.duration  = (int)t["duration"].as<float>();
-        out.coverUrl = currentCoverUrlForPlayer(playerMac, 128);
-        out.coverKey = trackKey(t);
+        String coverId = t["coverid"].as<String>();
+        out.coverUrl = coverUrlForId(coverId, 128);
+        out.coverKey = coverId.isEmpty() || coverId == "0" ? trackKey(t) : coverId;
+        if (out.coverUrl.isEmpty()) out.coverUrl = currentCoverUrlForPlayer(playerMac, 128);
     }
     srvLog("[LMS] %s | vol=%d%s pos=%d",
            out.title.isEmpty() ? "-" : out.title.c_str(),
