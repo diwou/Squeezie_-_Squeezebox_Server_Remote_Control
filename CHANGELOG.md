@@ -7,6 +7,10 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 ## [Unreleased]
 
 ### Behoben
+- **Browser-Cover wieder direkt auf 512x512 gesetzt**: der Webbrowser nutzt
+  jetzt wieder die direkte LMS-URL `cover_512x512_o.jpg` mit Cache-Buster.
+  Die 512px-Anzeige bleibt im Browser erhalten, ohne lokale Zwischenstation.
+  [`d42af9c`]
 - **Browser-Cover per Redirect stabilisiert**: `/api/cover-web` lenkt den
   Browser jetzt per 302 direkt auf die 512x512-Cover-URL im LMS, statt das Bild
   selbst zu übertragen. Dadurch bleibt der Browser im Gerät, aber der
