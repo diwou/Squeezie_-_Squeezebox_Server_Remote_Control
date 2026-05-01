@@ -802,26 +802,11 @@ static int interpolatePosition(const SqueezieStatus& s) {
     return s.position;
 }
 
-static String browserCoverUrl(const SqueezieStatus& s, uint32_t coverV) {
-    String url = s.coverUrl;
-    if (!url.isEmpty()) {
-        int q = url.indexOf('?');
-        String query = "";
-        if (q >= 0) {
-            query = url.substring(q);
-            url = url.substring(0, q);
-        }
-        url.replace("cover_128x128_f.jpg", "cover_512x512_o.jpg");
-        url.replace("cover_128x128_o.jpg", "cover_512x512_o.jpg");
-        if (query.isEmpty()) url += "?v=" + String(coverV);
-        else url += query + "&v=" + String(coverV);
-        return url;
-    }
+static String browserCoverUrl(uint32_t coverV) {
     if (g_srv.host.isEmpty() || g_srv.playerMac.isEmpty()) return "";
-    url = "http://" + g_srv.host + ":" + String(g_srv.port)
-        + "/music/current/cover_512x512_o.jpg?player=" + g_srv.playerMac
-        + "&v=" + String(coverV);
-    return url;
+    return "http://" + g_srv.host + ":" + String(g_srv.port)
+         + "/music/current/cover_512x512_o.jpg?player=" + g_srv.playerMac
+         + "&v=" + String(coverV);
 }
 
 static String statusToJson() {
@@ -843,7 +828,7 @@ static String statusToJson() {
     doc["repeatMode"] = s.repeatMode;
     doc["shuffleMode"]= s.shuffleMode;
     doc["playerName"] = s.playerName;
-    doc["coverUrl"]   = browserCoverUrl(s, coverV);
+    doc["coverUrl"]   = browserCoverUrl(coverV);
     doc["connected"]  = (g_wifiState == WIFI_STATE_CONNECTED);
     String out; serializeJson(doc, out);
     return out;
@@ -982,9 +967,8 @@ static void setupRoutes() {
             sendPage(req, PAGE_AP, CSS_COMMON, PAGE_AP2, nullptr);
         else
         {
-            SqueezieStatus status = squeezieGetCachedStatus();
             sendPage(req, PAGE_MAIN, CSS_COMMON, PAGE_MAIN2, nullptr,
-                     browserCoverUrl(status, displayGetCoverSerial()));
+                     browserCoverUrl(displayGetCoverSerial()));
         }
     });
 

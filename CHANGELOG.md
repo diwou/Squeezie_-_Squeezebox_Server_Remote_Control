@@ -7,6 +7,11 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 ## [Unreleased]
 
 ### Behoben
+- **Browser nutzte eine falsche 512er-Cover-URL**: statt der direkt
+  funktionierenden `music/current/cover_512x512_o.jpg`-Adresse wurde
+  eine aus `coverid` abgeleitete URL gebaut, die im Browser kein Bild lieferte.
+  Die Weboberfläche verwendet jetzt wieder die aktuelle Player-URL aus dem LMS.
+  [`1290969`]
 - **Browser bekam keine Cover-URL im initialen HTML**: die Weboberfläche
   baut die 512er-Cover-URL jetzt aus dem gecachten Status auf und ersetzt die
   Platzhalter direkt beim Rendern. Dadurch steht die Bildquelle schon im
