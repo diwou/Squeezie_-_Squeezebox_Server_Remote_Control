@@ -58,6 +58,7 @@ void displayDrawPlayerScreen() {
     drawTransportButtons(g_dPlaying);
 
     // Volume
+    drawVolumeButtons(g_dMuted);
     drawVolumeRow(g_dVolume, g_dMuted);
 
     // Mode
@@ -220,6 +221,7 @@ void displayUpdatePlayer() {
     if (st.volume != g_dVolume || st.muted != g_dMuted) {
         g_dVolume = st.volume;
         g_dMuted  = st.muted;
+        drawVolumeButtons(g_dMuted);
         drawVolumeRow(g_dVolume, g_dMuted);
     }
 
