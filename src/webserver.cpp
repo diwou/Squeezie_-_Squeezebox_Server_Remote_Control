@@ -472,7 +472,7 @@ function upd(d){
   txt('ds',fmt(dur));
   var pct=dur>0?Math.min(100,Math.round((d.position||0)/dur*1000)/10):0;
   document.getElementById('pb-fill').style.width=pct+'%';
-  var cover=d.coverWebUrl||d.coverUrl||'';
+  var cover=d.coverUrl||'';
   if(cover!==prevCover){
     prevCover=cover;
     var ci=document.getElementById('ci');
@@ -829,8 +829,7 @@ static String statusToJson() {
     doc["repeatMode"] = s.repeatMode;
     doc["shuffleMode"]= s.shuffleMode;
     doc["playerName"] = s.playerName;
-    doc["coverUrl"]   = s.coverUrl.isEmpty() ? "" : ("/api/cover?v=" + String(coverV));
-    doc["coverWebUrl"] = s.coverUrl.isEmpty() ? "" : browserCoverUrl(coverV);
+    doc["coverUrl"]   = s.coverUrl.isEmpty() ? "" : browserCoverUrl(coverV);
     doc["connected"]  = (g_wifiState == WIFI_STATE_CONNECTED);
     String out; serializeJson(doc, out);
     return out;
