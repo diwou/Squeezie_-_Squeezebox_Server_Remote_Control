@@ -7,6 +7,10 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 ## [Unreleased]
 
 ### Behoben
+- **Lautstärke-Buttons fehlten auf dem Display**: der Player-Screen zeichnete
+  nur noch die Lautstärkeanzeige, aber nicht mehr die Minus-, Plus- und Mute-
+  Buttons. Die Buttons werden jetzt wieder beim Screen-Aufbau und bei
+  Lautstärke-/Mute-Änderungen gerendert. [`2d0a8c0`]
 - **Display-Cover kamen zu langsam**: der Statuspfad nutzte wieder den
   originalen Cover-Download für das Display. Jetzt wird das Cover wieder
   direkt über die stabile `coverid` als `cover_128x128_f.jpg` geladen, damit
