@@ -7,11 +7,11 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 ## [Unreleased]
 
 ### Behoben
-- **Browser-Cover wieder direkt in 512x512 geladen**: die Web-Oberfläche
-  nutzt jetzt eine eigene LMS-URL für das aktuelle Cover und lädt es direkt
-  mit 512x512 aus dem Server. Der Cache-Buster hängt nur noch als Fragment an
-  der URL, damit der LMS-Pfad unverändert bleibt. Das Display bleibt bei
-  128x128. [`8376b83`]
+- **Browser-Cover per lokalem Proxy stabilisiert**: die Web-Oberfläche lädt
+  das 512x512-Cover jetzt über `/api/cover-web` vom Gerät selbst. Damit bleibt
+  der Browser auf derselben Origin, während das Display weiterhin sein eigenes
+  128er Cover nutzt. Gleichzeitig wurde die Cover-Fläche auf 512px erweitert.
+  [`ad36454`]
 - **OTA-Prozentanzeige saß zu hoch**: die Prozentzahl und der Neustart-Hinweis
   werden im OTA-Screen jetzt etwas tiefer unter dem Ladebalken gezeichnet,
   damit sie nicht mehr mitten im Balken stehen. [`8376b83`]
