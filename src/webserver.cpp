@@ -428,7 +428,7 @@ body{display:flex;flex-direction:column;min-height:100vh;max-width:560px;margin:
   </a>
 </nav>
 <script>
-var dur=0,prevCover='',volTimer=null,volMuted=false;
+var dur=0,prevCover='__COVER_URL__',volTimer=null,volMuted=false;
 var RPT=['Wiederholen: aus','Wiederholen: Titel','Wiederholen: Playlist'];
 var SHF=['Zufall: aus','Zufall: Titel','Zufall: Alben'];
 function fmt(s){s=Math.round(s);return Math.floor(s/60)+':'+(s%60<10?'0':'')+s%60;}
