@@ -7,6 +7,16 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 ## [Unreleased]
 
 ### Behoben
+- **Browser-Cover jetzt per Same-Origin-Proxy**: `/api/cover-large` holt das
+  512er-Cover serverseitig vom LMS und liefert es direkt aus der eigenen
+  Origin aus. Damit verschwinden Redirect-/Cross-Site-Probleme und der Browser
+  sieht den Cover-Wechsel wieder ohne `CTRL+F5`. `api/cover` bleibt
+  ausschließlich für das Display. [`unreleased`]
+- **Browser-Cover jetzt in 512×512 über `/api/cover-large`**: Die Weboberfläche
+  nutzt nur noch den großen Pfad; `browserCoverUrl()` liefert einen
+  Cache-Busting-URL mit eigener Seriennummer, und `/api/cover-large` liefert
+  das LMS-Bild als Proxy aus. Display: `/api/cover` (128×128) –
+  unverändert. [`4773fb2`]
 - **Browser-Cover wird jetzt als Hintergrundbild geladen**: der 512er-Link
   steckt direkt im `background-image` des Cover-Containers, statt als
   separates `<img>` mit Overlay/Load-Events gerendert zu werden.

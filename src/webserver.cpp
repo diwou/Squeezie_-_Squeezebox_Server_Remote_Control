@@ -14,6 +14,7 @@
 #include <time.h>
 #include <stdarg.h>
 #include <vector>
+#include <HTTPClient.h>
 
 // ─── Webserver-Log (Ring-Buffer, abrufbar unter /log) ────────────────────────
 
@@ -56,6 +57,19 @@ static int               g_otaError    = 0;       // letzter OTA-Fehlercode
 static bool              g_otaRejected = false;   // Upload-Datei vor Update.write abgelehnt
 static bool              g_loopWdtPausedForOta = false;
 static uint32_t          g_lastSyncReconcile = 0; // Sync-Volumen nur in Intervallen prüfen
+static constexpr size_t   WEB_COVER_BUF_SIZE = 196608;
+static constexpr uint32_t  WEB_COVER_RETRY_DELAY_MS = 15000;
+static constexpr uint32_t  WEB_COVER_TASK_TIMEOUT_MS = 8000;
+static uint8_t*           g_webCoverBuf = nullptr;
+static volatile size_t    g_webCoverLen = 0;
+static SemaphoreHandle_t  g_webCoverMux = nullptr;
+static TaskHandle_t       g_webCoverTask = nullptr;
+static String             g_webPendingCoverUrl;
+static String             g_webPendingCoverKey;
+static String             g_webLoadedCoverKey;
+static volatile uint32_t  g_webCoverRetryAt = 0;
+static volatile uint32_t  g_webCoverTaskStartedAt = 0;
+static volatile uint32_t  g_webCoverSerial = 0;
 
 // ─── Konfigurationsstrukturen ────────────────────────────────────────────────
 
@@ -785,11 +799,118 @@ static int interpolatePosition(const SqueezieStatus& s) {
     return s.position;
 }
 
-static String browserCoverUrl(uint32_t coverV) {
+static String browserCoverSourceUrl() {
     if (g_srv.host.isEmpty() || g_srv.playerMac.isEmpty()) return "";
     return "http://" + g_srv.host + ":" + String(g_srv.port)
-         + "/music/current/cover_512x512_o.jpg?player=" + g_srv.playerMac
-         + "&v=" + String(coverV);
+         + "/music/current/cover_512x512_o.jpg?player=" + g_srv.playerMac;
+}
+
+static bool webCoverTaskTimedOut(uint32_t now, uint32_t startedAt) {
+    return (now - startedAt) > WEB_COVER_TASK_TIMEOUT_MS;
+}
+
+static void webCoverTask(void* p) {
+    (void)p;
+    xSemaphoreTake(g_webCoverMux, portMAX_DELAY);
+    String url = g_webPendingCoverUrl;
+    String key = g_webPendingCoverKey;
+    g_webPendingCoverUrl    = "";
+    g_webPendingCoverKey    = "";
+    g_webCoverTaskStartedAt = millis();
+    xSemaphoreGive(g_webCoverMux);
+
+    bool   ok  = false;
+    size_t len = 0;
+
+    if (!url.isEmpty() && g_webCoverBuf) {
+        HTTPClient http;
+        http.setTimeout(3000);
+        if (http.begin(url)) {
+            int code = http.GET();
+            if (code == 200) {
+                WiFiClient* stream = http.getStreamPtr();
+                if (stream) {
+                    uint8_t buf[2048];
+                    uint32_t last = millis();
+                    while (http.connected() && stream->connected() && len < WEB_COVER_BUF_SIZE) {
+                        int avail = stream->available();
+                        if (avail <= 0) {
+                            if (millis() - last > 1200) break;
+                            delay(1);
+                            continue;
+                        }
+                        last = millis();
+                        int room = WEB_COVER_BUF_SIZE - len;
+                        int rd = stream->readBytes(buf, (avail < (int)sizeof(buf)) ? avail : (int)sizeof(buf));
+                        if (rd <= 0) break;
+                        if (rd > room) rd = room;
+                        memcpy(g_webCoverBuf + len, buf, rd);
+                        len += rd;
+                    }
+                    if (len > 1 && g_webCoverBuf[len - 2] == 0xFF && g_webCoverBuf[len - 1] == 0xD9) {
+                        ok = true;
+                    }
+                }
+            }
+            http.end();
+        }
+    }
+
+    xSemaphoreTake(g_webCoverMux, portMAX_DELAY);
+    if (ok) {
+        g_webCoverLen       = len;
+        g_webLoadedCoverKey = key;
+        g_webCoverSerial++;
+        g_webCoverRetryAt   = 0;
+    } else {
+        g_webCoverRetryAt   = millis() + WEB_COVER_RETRY_DELAY_MS;
+    }
+    g_webCoverTask          = nullptr;
+    g_webCoverTaskStartedAt  = 0;
+    xSemaphoreGive(g_webCoverMux);
+
+    vTaskDelete(nullptr);
+}
+
+static void webCoverPreload(const String& url, const String& key) {
+    if (url.isEmpty() || key.isEmpty()) return;
+
+    xSemaphoreTake(g_webCoverMux, portMAX_DELAY);
+
+    if (g_webCoverLen > 0 && g_webLoadedCoverKey == key) {
+        xSemaphoreGive(g_webCoverMux);
+        return;
+    }
+    if (g_webCoverTask != nullptr) {
+        if (webCoverTaskTimedOut(millis(), g_webCoverTaskStartedAt)) {
+            g_webCoverTask = nullptr;
+        } else {
+            g_webPendingCoverUrl = url;
+            g_webPendingCoverKey = key;
+            xSemaphoreGive(g_webCoverMux);
+            return;
+        }
+    }
+    if (g_webCoverRetryAt != 0 && millis() < g_webCoverRetryAt) {
+        xSemaphoreGive(g_webCoverMux);
+        return;
+    }
+
+    g_webPendingCoverUrl    = url;
+    g_webPendingCoverKey    = key;
+    g_webCoverTaskStartedAt  = millis();
+    g_webCoverRetryAt        = 0;
+    xTaskCreatePinnedToCore(webCoverTask, "webCover", 8192, nullptr, 1, &g_webCoverTask, 0);
+    xSemaphoreGive(g_webCoverMux);
+}
+
+static String browserCoverUrl(uint32_t coverV) {
+    (void)coverV;
+    return (g_webCoverLen == 0 || g_webLoadedCoverKey.isEmpty())
+        ? ""
+        : (g_srv.host.isEmpty() || g_srv.playerMac.isEmpty())
+        ? ""
+        : "/api/cover-large?v=" + String(g_webCoverSerial);
 }
 
 static String statusToJson() {
@@ -893,6 +1014,10 @@ bool wifiPollNow() {
     xSemaphoreTake(g_statusMux, portMAX_DELAY);
     g_status = tmp;
     xSemaphoreGive(g_statusMux);
+    if (tmp.coverKey != g_webLoadedCoverKey) {
+        String webUrl = browserCoverSourceUrl();
+        webCoverPreload(webUrl, tmp.coverKey);
+    }
     displayPreloadCover(tmp.coverUrl, tmp.coverKey);
     return true;
 }
@@ -973,6 +1098,21 @@ static void setupRoutes() {
         res->addHeader("Cache-Control", "no-store");
         res->write(cover.data(), cover.size());
         req->send(res);
+    });
+
+    server.on("/api/cover-large", HTTP_GET, [](AsyncWebServerRequest* req) {
+        xSemaphoreTake(g_webCoverMux, portMAX_DELAY);
+        bool ok = (g_webCoverBuf && g_webCoverLen > 0);
+        if (!ok) {
+            xSemaphoreGive(g_webCoverMux);
+            req->send(204, "image/jpeg", "");
+            return;
+        }
+        AsyncWebServerResponse* res = req->beginResponse(200, "image/jpeg", g_webCoverBuf, g_webCoverLen);
+        res->addHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+        res->addHeader("Pragma", "no-cache");
+        req->send(res);
+        xSemaphoreGive(g_webCoverMux);
     });
 
     server.on("/api/control", HTTP_POST,
@@ -1305,6 +1445,8 @@ static void setupRoutes() {
 
 void webserverInit() {
     g_statusMux = xSemaphoreCreateMutex();
+    g_webCoverMux = xSemaphoreCreateMutex();
+    g_webCoverBuf = (uint8_t*)ps_malloc(WEB_COVER_BUF_SIZE);
     loadCfg();
     WiFi.persistent(false);
     srvLog("[WebServer] SSID='%s'  Server='%s'",
