@@ -7,6 +7,9 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 ## [Unreleased]
 
 ### Behoben
+- **LMS-Status-Poll beschleunigt**: der reguläre Poll-Abstand wurde von
+  900 ms auf 500 ms verkürzt, damit Cover- und Statuswechsel auf dem Display
+  schneller sichtbar werden. [`unreleased`]
 - **Browser-Cover jetzt per Same-Origin-Proxy**: `/api/cover-large` holt das
   512er-Cover serverseitig vom LMS und liefert es direkt aus der eigenen
   Origin aus. Damit verschwinden Redirect-/Cross-Site-Probleme und der Browser

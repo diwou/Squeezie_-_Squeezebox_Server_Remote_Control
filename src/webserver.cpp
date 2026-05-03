@@ -86,7 +86,7 @@ static SrvCfg g_srv;
 static String g_playlistId;
 static String g_playlistName;
 
-static constexpr uint32_t LMS_POLL_INTERVAL_MS = 900;
+static constexpr uint32_t LMS_POLL_INTERVAL_MS = 500;
 static constexpr uint32_t LMS_FAST_POLL_INTERVAL_MS = 150;
 static constexpr uint32_t LMS_FAST_POLL_WINDOW_MS = 1800;
 static constexpr uint32_t SYNC_RECONCILE_INTERVAL_MS = 30000;
