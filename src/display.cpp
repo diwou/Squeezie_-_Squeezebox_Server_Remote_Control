@@ -33,6 +33,7 @@ int     g_lastProgFilled = -1;
 int     g_lastVolFilled  = -1;
 bool    g_lastVolMuted   = false;
 int     g_lastClockMin   = -2;
+uint32_t g_lastFullRedrawMs = 0;
 
 // ─── Settings screen state ───────────────────────────────────────────────────
 std::vector<SqueeziePlayer>   g_settPlayers;

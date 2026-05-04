@@ -43,6 +43,8 @@ void displayShowStartup(const char* version, const char* ip) {
 
 void displayDrawPlayerScreen() {
     g_screen = SCREEN_PLAYER;
+    g_lastFullRedrawMs = millis();
+    tft.setBrightness(255);
     tft.fillScreen(COL_BG);
 
     // Header
@@ -76,6 +78,12 @@ void displayDrawPlayerScreen() {
 
 void displayUpdatePlayer() {
     if (g_screen != SCREEN_PLAYER) return;
+
+    uint32_t now = millis();
+    if (g_lastFullRedrawMs != 0 && now - g_lastFullRedrawMs > 21600000UL) {
+        displayDrawPlayerScreen();
+        return;
+    }
 
     SqueezieStatus st = squeezieGetCachedStatus();
 
@@ -127,7 +135,6 @@ void displayUpdatePlayer() {
     }
 
     // Scroll-Tick: Fraktionaler Akkumulator
-    uint32_t now = millis();
     int scrollMs = wifiGetScrollSpeed();
     if (scrollMs < 1) scrollMs = 1;
     static uint32_t s_scrollAccum = 0;
@@ -548,6 +555,7 @@ void displayInit() {
     // Hintergrundbeleuchtung einschalten
     pinMode(PIN_TFT_BL, OUTPUT);
     digitalWrite(PIN_TFT_BL, HIGH);
+    tft.setBrightness(255);
 
     // Cover-Puffer in PSRAM allozieren
     if (!g_coverBuf)   g_coverBuf   = (uint8_t*)ps_malloc(64000);

@@ -105,6 +105,7 @@ extern int     g_lastProgFilled;
 extern int     g_lastVolFilled;
 extern bool    g_lastVolMuted;
 extern int     g_lastClockMin;
+extern uint32_t g_lastFullRedrawMs;
 
 // Settings screen state
 extern std::vector<SqueeziePlayer>   g_settPlayers;
