@@ -12,7 +12,7 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
   Stunden einen Voll-Refresh. Das setzt verlorene Backlight-Zustände zurück
   und fängt festhängende TFT-Inhalte ab, ohne den normalen Poll-Zyklus zu
   verändern.
-  [`unreleased`]
+  [`6800130`]
 - **LMS-Status-Poll beschleunigt**: der reguläre Poll-Abstand wurde von
   900 ms auf 500 ms verkürzt, damit Cover- und Statuswechsel auf dem Display
   schneller sichtbar werden. [`f3ecbc0`]
