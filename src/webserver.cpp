@@ -883,7 +883,9 @@ static void webCoverPreload(const String& url, const String& key) {
     }
     if (g_webCoverTask != nullptr) {
         if (webCoverTaskTimedOut(millis(), g_webCoverTaskStartedAt)) {
+            TaskHandle_t staleTask = g_webCoverTask;
             g_webCoverTask = nullptr;
+            vTaskDelete(staleTask);
         } else {
             g_webPendingCoverUrl = url;
             g_webPendingCoverKey = key;
@@ -900,7 +902,15 @@ static void webCoverPreload(const String& url, const String& key) {
     g_webPendingCoverKey    = key;
     g_webCoverTaskStartedAt  = millis();
     g_webCoverRetryAt        = 0;
-    xTaskCreatePinnedToCore(webCoverTask, "webCover", 8192, nullptr, 1, &g_webCoverTask, 0);
+    BaseType_t created = xTaskCreatePinnedToCore(webCoverTask, "webCover", 8192, nullptr, 1, &g_webCoverTask, 0);
+    if (created != pdPASS) {
+        g_webCoverTask       = nullptr;
+        g_webCoverRetryAt    = millis() + WEB_COVER_RETRY_DELAY_MS;
+        g_webPendingCoverUrl = "";
+        g_webPendingCoverKey = "";
+        xSemaphoreGive(g_webCoverMux);
+        return;
+    }
     xSemaphoreGive(g_webCoverMux);
 }
 

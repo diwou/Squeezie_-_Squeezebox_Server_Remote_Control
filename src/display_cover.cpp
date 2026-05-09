@@ -217,7 +217,9 @@ void displayPreloadCover(const String& url, const String& cacheKey) {
     if (g_coverTask != nullptr) {
         // Timeout? Dann alten Task aufgeben
         if (coverTaskTimedOut(millis(), g_coverTaskStartedAt)) {
+            TaskHandle_t staleTask = g_coverTask;
             g_coverTask = nullptr;
+            vTaskDelete(staleTask);
         } else {
             xSemaphoreGive(g_coverMux);
             return;
@@ -240,6 +242,14 @@ void displayPreloadCover(const String& url, const String& cacheKey) {
     g_coverLen           = 0;
     g_loadedCoverKey     = "";
 
-    xTaskCreatePinnedToCore(coverDlTask, "coverDl", 8192, nullptr, 1, &g_coverTask, 0);
+    BaseType_t created = xTaskCreatePinnedToCore(coverDlTask, "coverDl", 8192, nullptr, 1, &g_coverTask, 0);
+    if (created != pdPASS) {
+        g_coverTask          = nullptr;
+        g_coverRetryAt       = millis() + COVER_RETRY_DELAY_MS;
+        g_pendingCoverUrl    = "";
+        g_pendingCoverKey    = "";
+        xSemaphoreGive(g_coverMux);
+        return;
+    }
     xSemaphoreGive(g_coverMux);
 }
