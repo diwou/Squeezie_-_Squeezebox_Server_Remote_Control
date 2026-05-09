@@ -7,6 +7,12 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 ## [Unreleased]
 
 ### Behoben
+- **Cover-Downloads konnten sich nach Task-Timeouts festfahren**: abgelaufene
+  Cover-Tasks werden jetzt wirklich beendet statt nur aus dem Handle entfernt.
+  Zusätzlich prüft der Start des Cover-Tasks nun auf Erzeugungsfehler und geht
+  bei fehlendem Task-Slot in einen kontrollierten Retry-Zustand. Das verhindert,
+  dass sich über lange Laufzeiten immer mehr hängende Cover-Tasks sammeln, bis
+  keine neuen Downloads mehr starten. [`b3da145`]
 - **Display blieb nach langen Laufzeiten dunkel**: der Player-Screen setzt
   nun beim Aufbau die volle Hintergrundbeleuchtung und erzwingt nach mehreren
   Stunden einen Voll-Refresh. Das setzt verlorene Backlight-Zustände zurück
