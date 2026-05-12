@@ -1,5 +1,6 @@
 #pragma once
 #include <LovyanGFX.hpp>
+#include "config.h"
 
 // =============================================================================
 // LovyanGFX Konfiguration: ILI9488 3,5" SPI-Display + XPT2046 Touch
@@ -23,11 +24,10 @@ public:
             cfg.spi_3wire   = false;
             cfg.use_lock    = true;
             cfg.dma_channel = SPI_DMA_CH_AUTO;
-            cfg.pin_sclk    = 12;        // SCK
-            cfg.pin_mosi    = 11;        // MOSI
-            cfg.pin_miso    = -1;        // MISO nicht belegen — ILI9488 tristatet SDO nicht,
-                                         // GPIO 13 bleibt frei für XPT2046
-            cfg.pin_dc      = 9;         // DC
+            cfg.pin_sclk    = PIN_TFT_SCLK;
+            cfg.pin_mosi    = PIN_TFT_MOSI;
+            cfg.pin_miso    = PIN_TFT_MISO;
+            cfg.pin_dc      = PIN_TFT_DC;
             _bus.config(cfg);
             _panel.setBus(&_bus);
         }
@@ -35,8 +35,8 @@ public:
         // ── Display-Panel ─────────────────────────────────────────────────
         {
             auto cfg = _panel.config();
-            cfg.pin_cs           = 10;   // CS
-            cfg.pin_rst          = 8;    // RST
+            cfg.pin_cs           = PIN_TFT_CS;
+            cfg.pin_rst          = PIN_TFT_RST;
             cfg.pin_busy         = -1;
             cfg.panel_width      = 320;  // Nativauflösung (Hochformat)
             cfg.panel_height     = 480;
@@ -45,18 +45,18 @@ public:
             cfg.offset_rotation  = 0;
             cfg.dummy_read_pixel = 8;
             cfg.dummy_read_bits  = 1;
-            cfg.readable         = false;  // kein Read-Back vom Display (MISO nicht angeschlossen)
+            cfg.readable         = true;
             cfg.invert           = false;
             cfg.rgb_order        = false; // BGR (ILI9488 Standard)
             cfg.dlen_16bit       = false;
-            cfg.bus_shared       = true;  // Bus geteilt mit Touch
+            cfg.bus_shared       = false; // Touch läuft über separaten SPI-Bus
             _panel.config(cfg);
         }
 
         // ── Hintergrundbeleuchtung (PWM) ──────────────────────────────────
         {
             auto cfg = _light.config();
-            cfg.pin_bl     = 7;     // BL
+            cfg.pin_bl     = PIN_TFT_BL;
             cfg.invert     = false; // HIGH = an
             cfg.freq       = 44100;
             cfg.pwm_channel = 7;

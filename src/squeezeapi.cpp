@@ -336,11 +336,22 @@ bool squeezeDiscover(String& foundHost, uint16_t& foundPort, uint32_t timeoutMs)
     // ── 1. UDP-Broadcast ─────────────────────────────────────────────────────
     {
         WiFiUDP udp;
-        udp.begin(3484);
+        udp.begin(0);
         const uint8_t pkt[] = {
             'e','I','P','A','D',0,'N','A','M','E',0,
             'S','q','u','e','e','z','i','e',0
         };
+        IPAddress local = WiFi.localIP();
+        IPAddress mask  = WiFi.subnetMask();
+        IPAddress bcast(local[0] | (uint8_t)~mask[0],
+                        local[1] | (uint8_t)~mask[1],
+                        local[2] | (uint8_t)~mask[2],
+                        local[3] | (uint8_t)~mask[3]);
+
+        udp.beginPacket(bcast, 3483);
+        udp.write(pkt, sizeof(pkt));
+        udp.endPacket();
+        // Fallback für Netze, in denen nur 255.255.255.255 geroutet wird.
         udp.beginPacket(IPAddress(255, 255, 255, 255), 3483);
         udp.write(pkt, sizeof(pkt));
         udp.endPacket();
@@ -349,7 +360,7 @@ bool squeezeDiscover(String& foundHost, uint16_t& foundPort, uint32_t timeoutMs)
             if (len > 0) {
                 uint8_t buf[64];
                 int n = udp.read(buf, sizeof(buf));
-                if (n > 0 && buf[0] == 'E') {
+                if (n > 0 && (buf[0] == 'E' || buf[0] == 'e')) {
                     foundHost = udp.remoteIP().toString();
                     foundPort = LYRION_DEFAULT_PORT;
                     udp.stop();
@@ -361,15 +372,19 @@ bool squeezeDiscover(String& foundHost, uint16_t& foundPort, uint32_t timeoutMs)
         udp.stop();
     }
 
-    // ── 2. TCP-Portscan häufiger Server-IPs (kein vollständiger /24-Scan) ────
+    // ── 2. TCP-Portscan im gesamten lokalen Subnetz (nach Subnetzmaske) ──────
     IPAddress local = WiFi.localIP();
-    if (!local || millis() - t0 >= timeoutMs) return false;
+    IPAddress mask  = WiFi.subnetMask();
+    if (!local || !mask || millis() - t0 >= timeoutMs) return false;
 
-    // Typische Server-Adressen zuerst (.1, .2, .100-.110, .200-.205, .254)
-    const int prio[] = {1, 2, 100, 101, 102, 103, 104, 105, 200, 201, 202, 254};
+    // Typische Server-Adressen zuerst
+    const int prio[] = {1, 2, 10, 20, 30, 50, 100, 101, 110, 120, 150, 200, 201, 220, 254};
     WiFiClient c;
+    bool tried[256] = {false};
     for (int oct : prio) {
         if (millis() - t0 >= timeoutMs) break;
+        if (oct < 1 || oct > 254) continue;
+        tried[oct] = true;
         if ((int)local[3] == oct) continue;
         IPAddress ip(local[0], local[1], local[2], oct);
         if (c.connect(ip, LYRION_DEFAULT_PORT, 400)) {
@@ -379,6 +394,41 @@ bool squeezeDiscover(String& foundHost, uint16_t& foundPort, uint32_t timeoutMs)
             return true;
         }
         c.stop();
+    }
+
+    // Danach Subnetz-Maskenbereich vollständig durchlaufen, bis Timeout erreicht ist.
+    uint32_t localU = ((uint32_t)local[0] << 24)
+                    | ((uint32_t)local[1] << 16)
+                    | ((uint32_t)local[2] << 8)
+                    | (uint32_t)local[3];
+    uint32_t maskU  = ((uint32_t)mask[0] << 24)
+                    | ((uint32_t)mask[1] << 16)
+                    | ((uint32_t)mask[2] << 8)
+                    | (uint32_t)mask[3];
+    uint32_t netU   = localU & maskU;
+    uint32_t bcU    = netU | ~maskU;
+    if (bcU <= netU + 1) return false;
+
+    for (uint32_t hostU = netU + 1; hostU < bcU; hostU++) {
+        if (millis() - t0 >= timeoutMs) break;
+        if (hostU == localU) continue;
+        uint8_t lastOct = (uint8_t)(hostU & 0xFF);
+        if (tried[lastOct]
+            && ((hostU >> 8) & 0x00FFFFFF) == ((localU >> 8) & 0x00FFFFFF)) {
+            continue;
+        }
+        IPAddress ip((uint8_t)((hostU >> 24) & 0xFF),
+                     (uint8_t)((hostU >> 16) & 0xFF),
+                     (uint8_t)((hostU >> 8) & 0xFF),
+                     (uint8_t)(hostU & 0xFF));
+        if (c.connect(ip, LYRION_DEFAULT_PORT, 90)) {
+            c.stop();
+            foundHost = ip.toString();
+            foundPort = LYRION_DEFAULT_PORT;
+            return true;
+        }
+        c.stop();
+        delay(1);
     }
     return false;
 }

@@ -14,19 +14,20 @@
 #endif
 
 // --- Pins ---
-#define PIN_TFT_BL      7   // Hintergrundbeleuchtung (HIGH = an)
-#define PIN_TFT_CS      10  // Display Chip-Select
-#define PIN_TFT_DC      9   // Display Data/Command
-#define PIN_TFT_RST     8   // Display Reset
-#define PIN_TFT_MOSI    11  // Display MOSI (SPI)
-#define PIN_TFT_SCLK    12  // Display SCK (SPI)
-#define PIN_TOUCH_CS    4   // Touch Chip-Select (TCS)
-#define PIN_TOUCH_IRQ   5   // Touch-Interrupt (PEN, LOW = berührt, nicht angeschlossen)
-#define PIN_TOUCH_MOSI  13  // Touch MOSI (SPI, shared MISO mit Display)
-#define PIN_TOUCH_MISO  13  // Touch MISO (SPI, shared mit MOSI da ILI9488 MISO nicht tristatet)
-#define PIN_TOUCH_SCLK  12  // Touch SCK (SPI, shared mit Display)
+#define PIN_TFT_BL      9   // Hintergrundbeleuchtung (HIGH = an)
+#define PIN_TFT_CS      17  // Display Chip-Select
+#define PIN_TFT_DC      8   // Display Data/Command
+#define PIN_TFT_RST     18  // Display Reset
+#define PIN_TFT_MOSI    3   // Display SDI / MOSI (SPI)
+#define PIN_TFT_MISO    10  // Display SDO / MISO (SPI, optional read-back)
+#define PIN_TFT_SCLK    46  // Display SCK (SPI)
+#define PIN_TOUCH_CS    12  // Touch Chip-Select (TCS)
+#define PIN_TOUCH_IRQ   21  // Touch-Interrupt (PEN, LOW = berührt)
+#define PIN_TOUCH_MOSI  13  // Touch T_DIN / MOSI (SPI)
+#define PIN_TOUCH_MISO  14  // Touch T_DOUT / MISO (SPI)
+#define PIN_TOUCH_SCLK  11  // Touch T_CLK / SCK (SPI)
 #define PIN_BOOT_BTN    0   // Eingebauter BOOT-Button (LOW = gedrückt)
-#define PIN_PLAY_BTN    1   // Externer Play/Pause-Taster (LOW = gedrückt)
+#define PIN_PLAY_BTN    15  // Externer Play/Pause-Taster (LOW = gedrückt)
 
 // --- Display ---
 #define DISPLAY_ROTATION    1   // 1 = Querformat: 480×320

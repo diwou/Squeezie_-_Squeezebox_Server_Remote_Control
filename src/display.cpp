@@ -4,7 +4,9 @@
 LGFX tft;
 
 // ─── XPT2046 direkt über SPI ────────────────────────────────────────────────
-SPIClass touchSPI(FSPI);
+// Eigener SPI-Host für Touch (separat vom Display-Bus in LGFX_setup.h)
+// cspell:ignore HSPI
+SPIClass touchSPI(HSPI);
 bool     touchSPIinited = false;
 
 // Kalibrierungsdaten (aus NVS geladen oder Standardwerte)

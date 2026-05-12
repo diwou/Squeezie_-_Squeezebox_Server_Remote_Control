@@ -18,27 +18,24 @@ ESP32-S3-basierte Fernsteuerung für einen Lyrion/Squeezebox-Medienserver mit IL
 
 ## Verkabelung
 
-Das Display-Modul hat 14 Pins. Display-SPI und Touch-SPI teilen sich MOSI, MISO und SCK.
+Das Display-Modul hat 14 Pins. Display-SPI und Touch-SPI sind auf getrennte GPIOs gelegt.
 
 | Display-Pin | Bezeichnung | ESP32-S3 GPIO | Hinweis |
 |---|---|---|---|
 | 1 | VCC | 3,3 V | Spannungsversorgung |
 | 2 | GND | GND | Masse |
-| 3 | CS | GPIO 10 | LCD Chip Select |
-| 4 | RST | GPIO 8 | LCD Reset |
+| 3 | CS | GPIO 17 | LCD Chip Select |
+| 4 | RST | GPIO 18 | LCD Reset |
 | 5 | DC/OC | GPIO 9 | Data/Command |
-| 6 | SDI | GPIO 11 | MOSI (geteilt) |
-| 7 | SCK | GPIO 12 | SPI-Takt (geteilt) |
-| 8 | BL | GPIO 7 | Hintergrundbeleuchtung (HIGH = an) |
-| 9 | SDO | GPIO 13 | MISO (geteilt, optional für LCD) |
-| 10 | TCK | GPIO 12 | Touch SPI-Takt (geteilt mit SCK) |
-| 11 | TCS | GPIO 4 | Touch Chip Select |
-| 12 | TDI | GPIO 11 | Touch MOSI (geteilt mit SDI) |
-| 13 | TDO | GPIO 13 | Touch MISO (geteilt mit SDO) |
-| 14 | PEN | GPIO 5 | Touch-Interrupt (IRQ) |
-
-> **Hinweis:** Pins 9 (SDO) und 13 (TDO) werden beide mit GPIO 13 verbunden.
-> Da LCD und Touch unterschiedliche Chip-Select-Leitungen haben, arbeiten sie nie gleichzeitig.
+| 6 | SDI | GPIO 3 | Display MOSI |
+| 7 | SCK | GPIO 46 | Display SPI-Takt |
+| 8 | BL | GPIO 9 | Hintergrundbeleuchtung (HIGH = an) |
+| 9 | SDO | GPIO 10 | Display MISO (optional) |
+| 10 | TCK | GPIO 11 | Touch SPI-Takt |
+| 11 | TCS | GPIO 12 | Touch Chip Select |
+| 12 | TDI | GPIO 13 | Touch MOSI |
+| 13 | TDO | GPIO 14 | Touch MISO |
+| 14 | PEN | GPIO 21 | Touch-Interrupt (IRQ) |
 
 ## Software-Einrichtung
 
