@@ -44,6 +44,7 @@ String   g_settDiscHost;
 uint16_t g_settDiscPort  = 0;
 bool     g_settDiscFound = false;
 bool     g_settSearched  = false;
+bool     g_settSearching = false;
 
 // ─── Scroll-State ────────────────────────────────────────────────────────────
 int32_t g_scrollOff[3]   = {0, 0, 0};

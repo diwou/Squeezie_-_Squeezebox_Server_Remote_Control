@@ -4,52 +4,122 @@
 #include "webserver.h"
 #include "esp_task_wdt.h"
 
-static void handlePlayPauseButton() {
-    static bool     lastRawState      = HIGH;
-    static bool     stableState       = HIGH;
-    static uint32_t lastChangeAt      = 0;
-    static bool     pressHandled      = false;
-    const uint32_t  debounceMs        = 35;
+struct ButtonDebounceState {
+    bool     lastRawState = HIGH;
+    bool     stableState = HIGH;
+    uint32_t lastChangeAt = 0;
+    bool     pressHandled = false;
+};
 
-    bool rawState = digitalRead(PIN_PLAY_BTN);
-    if (rawState != lastRawState) {
-        lastRawState = rawState;
-        lastChangeAt = millis();
+static bool consumeButtonPress(uint8_t pin, ButtonDebounceState& state) {
+    const uint32_t debounceMs = 35;
+    bool rawState = digitalRead(pin);
+    if (rawState != state.lastRawState) {
+        state.lastRawState = rawState;
+        state.lastChangeAt = millis();
     }
-    if (millis() - lastChangeAt < debounceMs) return;
-    if (stableState == rawState) return;
+    if (millis() - state.lastChangeAt < debounceMs) return false;
+    if (state.stableState == rawState) return false;
 
-    stableState = rawState;
-    if (stableState == HIGH) {
-        pressHandled = false;
-        return;
+    state.stableState = rawState;
+    if (state.stableState == HIGH) {
+        state.pressHandled = false;
+        return false;
     }
-    if (pressHandled) return;
+    if (state.pressHandled) return false;
+    state.pressHandled = true;
+    return true;
+}
+
+static void handleHardwareButtons() {
+    static ButtonDebounceState playBtn;
+    static ButtonDebounceState prevBtn;
+    static ButtonDebounceState nextBtn;
+    static ButtonDebounceState volUpBtn;
+    static ButtonDebounceState volDnBtn;
+    static ButtonDebounceState muteBtn;
 
     String mac = wifiGetPlayerMac();
-    if (mac.isEmpty()) {
-        srvLog("[HW] Play/Pause ignoriert: kein Player gesetzt.");
-        pressHandled = true;
-        return;
-    }
+    if (mac.isEmpty()) return;
 
-    SqueezieStatus status = squeezieGetCachedStatus();
-    wifiBeginUserCommand();
-    bool ok = status.playing ? squeezePause(mac) : squeezePlay(mac);
-    if (ok) {
-        status.playing = !status.playing;
-        wifiUpdateCachedStatus(status);
-        srvLog("[HW] Play/Pause-Taster ausgelöst.");
-    } else {
-        srvLog("[HW] Play/Pause fehlgeschlagen.");
+    if (consumeButtonPress(PIN_PLAY_BTN, playBtn)) {
+        SqueezieStatus status = squeezieGetCachedStatus();
+        wifiBeginUserCommand();
+        bool ok = status.playing ? squeezePause(mac) : squeezePlay(mac);
+        if (ok) {
+            status.playing = !status.playing;
+            wifiUpdateCachedStatus(status);
+            srvLog("[HW] Play/Pause-Taster ausgelöst.");
+        } else {
+            srvLog("[HW] Play/Pause fehlgeschlagen.");
+        }
+        wifiEndUserCommand(ok);
     }
-    wifiEndUserCommand(ok);
-    pressHandled = true;
+    if (consumeButtonPress(PIN_PREV_BTN, prevBtn)) {
+        wifiBeginUserCommand();
+        bool ok = squeezePrev(mac);
+        if (ok) srvLog("[HW] Track-zurueck-Taster ausgelöst.");
+        else srvLog("[HW] Track-zurueck fehlgeschlagen.");
+        wifiEndUserCommand(ok);
+    }
+    if (consumeButtonPress(PIN_NEXT_BTN, nextBtn)) {
+        wifiBeginUserCommand();
+        bool ok = squeezeNext(mac);
+        if (ok) srvLog("[HW] Track-vor-Taster ausgelöst.");
+        else srvLog("[HW] Track-vor fehlgeschlagen.");
+        wifiEndUserCommand(ok);
+    }
+    if (consumeButtonPress(PIN_VOL_UP_BTN, volUpBtn)) {
+        wifiBeginUserCommand();
+        bool ok = squeezeAdjustVolume(mac, +5);
+        if (ok) {
+            SqueezieStatus status = squeezieGetCachedStatus();
+            status.volume = constrain(status.volume + 5, 0, 100);
+            status.muted = false;
+            wifiUpdateCachedStatus(status);
+            srvLog("[HW] Volume+ Taster ausgelöst.");
+        } else {
+            srvLog("[HW] Volume+ fehlgeschlagen.");
+        }
+        wifiEndUserCommand(ok);
+    }
+    if (consumeButtonPress(PIN_VOL_DN_BTN, volDnBtn)) {
+        wifiBeginUserCommand();
+        bool ok = squeezeAdjustVolume(mac, -5);
+        if (ok) {
+            SqueezieStatus status = squeezieGetCachedStatus();
+            status.volume = constrain(status.volume - 5, 0, 100);
+            status.muted = false;
+            wifiUpdateCachedStatus(status);
+            srvLog("[HW] Volume- Taster ausgelöst.");
+        } else {
+            srvLog("[HW] Volume- fehlgeschlagen.");
+        }
+        wifiEndUserCommand(ok);
+    }
+    if (consumeButtonPress(PIN_MUTE_BTN, muteBtn)) {
+        wifiBeginUserCommand();
+        bool ok = squeezeToggleMute(mac);
+        if (ok) {
+            SqueezieStatus status = squeezieGetCachedStatus();
+            status.muted = !status.muted;
+            wifiUpdateCachedStatus(status);
+            srvLog("[HW] Mute-Taster ausgelöst.");
+        } else {
+            srvLog("[HW] Mute fehlgeschlagen.");
+        }
+        wifiEndUserCommand(ok);
+    }
 }
 
 void setup() {
     pinMode(PIN_BOOT_BTN, INPUT_PULLUP);
     pinMode(PIN_PLAY_BTN, INPUT_PULLUP);
+    pinMode(PIN_PREV_BTN, INPUT_PULLUP);
+    pinMode(PIN_NEXT_BTN, INPUT_PULLUP);
+    pinMode(PIN_VOL_UP_BTN, INPUT_PULLUP);
+    pinMode(PIN_VOL_DN_BTN, INPUT_PULLUP);
+    pinMode(PIN_MUTE_BTN, INPUT_PULLUP);
 
     displayInit();                         // Display + ggf. Touch-Kalibrierung
     displayShowStartup("v" APP_VERSION, ""); // Startup-Screen sofort anzeigen
@@ -116,6 +186,6 @@ void loop() {
     }
     displayUpdatePlayer(); // Geänderte Felder des Player-Screens aktualisieren
     displayHandleTouch();  // Touch nach Display: SPI-DMA ist dann abgeschlossen
-    handlePlayPauseButton();
+    handleHardwareButtons();
     delay(20);
 }

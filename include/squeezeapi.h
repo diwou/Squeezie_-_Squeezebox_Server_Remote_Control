@@ -13,6 +13,7 @@
 
 #include <Arduino.h>
 #include <vector>
+// cspell:ignore slimproto
 
 /**
  * @struct SqueeziePlayer
@@ -152,9 +153,9 @@ int  squeezeVolumeToLms(int uiVolume);
 /**
  * @brief Sucht einen Lyrion-Server im lokalen Netzwerk.
  *
- * Führt zuerst einen UDP-Broadcast auf Port 3483 (Slim-Protokoll) durch.
- * Falls keine Antwort innerhalb von 1500 ms, folgt ein TCP-Portscan auf
- * typischen Server-IPs (.1, .2, .100–.105, .200–.202, .254).
+ * Führt primär eine UDP-Discovery auf Port 3483 (Slim-Discovery-Protokoll)
+ * per Broadcast aus. Falls dabei kein Treffer kommt, wird als Fallback
+ * mDNS (`_slimproto._tcp`) abgefragt.
  *
  * @param[out] foundHost Gefundene IP-Adresse des Servers.
  * @param[out] foundPort Gefundener Port (Standard 9000).

@@ -28,6 +28,11 @@
 #define PIN_TOUCH_SCLK  11  // Touch T_CLK / SCK (SPI)
 #define PIN_BOOT_BTN    0   // Eingebauter BOOT-Button (LOW = gedrückt)
 #define PIN_PLAY_BTN    15  // Externer Play/Pause-Taster (LOW = gedrückt)
+#define PIN_PREV_BTN    16  // Externer Track-zurueck-Taster (LOW = gedrückt)
+#define PIN_NEXT_BTN    7   // Externer Track-vor-Taster (LOW = gedrückt)
+#define PIN_VOL_UP_BTN  4   // Externer Volume-Plus-Taster (LOW = gedrückt)
+#define PIN_VOL_DN_BTN  6   // Externer Volume-Minus-Taster (LOW = gedrückt)
+#define PIN_MUTE_BTN    5   // Externer Mute-Taster (LOW = gedrückt)
 
 // --- Display ---
 #define DISPLAY_ROTATION    1   // 1 = Querformat: 480×320

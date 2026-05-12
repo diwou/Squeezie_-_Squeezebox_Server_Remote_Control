@@ -5,6 +5,8 @@
 #include <ArduinoJson.h>
 #include <WiFiUdp.h>
 #include <WiFi.h>
+#include <ESPmDNS.h>
+// cspell:ignore slimproto
 
 static String   g_host;
 static uint16_t g_port = LYRION_DEFAULT_PORT;
@@ -331,15 +333,36 @@ bool squeezeLoadPlaylist(const String& mac, const String& playlistId,
 // 2. TCP-Portscan der Prioritäts-IPs im lokalen Subnetz — zuverlässiger Fallback
 
 bool squeezeDiscover(String& foundHost, uint16_t& foundPort, uint32_t timeoutMs) {
+    auto parseJsonPort = [](const uint8_t* data, int len) -> uint16_t {
+        if (!data || len <= 0) return LYRION_DEFAULT_PORT;
+        for (int i = 0; i < len - 4; i++) {
+            if (data[i] == 'J' && data[i + 1] == 'S' && data[i + 2] == 'O' && data[i + 3] == 'N') {
+                int p = i + 4;
+                while (p < len && (data[p] == 0 || data[p] == ':' || data[p] == '=' || data[p] == ' ')) p++;
+                int port = 0;
+                while (p < len && data[p] >= '0' && data[p] <= '9') {
+                    port = (port * 10) + (data[p] - '0');
+                    p++;
+                    if (port > 65535) break;
+                }
+                if (port > 0 && port <= 65535) return (uint16_t)port;
+            }
+        }
+        return LYRION_DEFAULT_PORT;
+    };
+
     uint32_t t0 = millis();
+    srvLog("[LMS] Discovery gestartet (Timeout %ums).", (unsigned)timeoutMs);
 
     // ── 1. UDP-Broadcast ─────────────────────────────────────────────────────
     {
         WiFiUDP udp;
         udp.begin(0);
-        const uint8_t pkt[] = {
+        const uint8_t pktA[] = {'e','I','P','A'};
+        const uint8_t pktB[] = {
             'e','I','P','A','D',0,'N','A','M','E',0,
-            'S','q','u','e','e','z','i','e',0
+            'S','q','u','e','e','z','i','e',0,
+            'J','S','O','N',0,'V','E','R','S',0,'U','U','I','D',0
         };
         IPAddress local = WiFi.localIP();
         IPAddress mask  = WiFi.subnetMask();
@@ -349,22 +372,35 @@ bool squeezeDiscover(String& foundHost, uint16_t& foundPort, uint32_t timeoutMs)
                         local[3] | (uint8_t)~mask[3]);
 
         udp.beginPacket(bcast, 3483);
-        udp.write(pkt, sizeof(pkt));
+        udp.write(pktA, sizeof(pktA));
+        udp.endPacket();
+        udp.beginPacket(bcast, 3483);
+        udp.write(pktB, sizeof(pktB));
         udp.endPacket();
         // Fallback für Netze, in denen nur 255.255.255.255 geroutet wird.
         udp.beginPacket(IPAddress(255, 255, 255, 255), 3483);
-        udp.write(pkt, sizeof(pkt));
+        udp.write(pktA, sizeof(pktA));
+        udp.endPacket();
+        udp.beginPacket(IPAddress(255, 255, 255, 255), 3483);
+        udp.write(pktB, sizeof(pktB));
         udp.endPacket();
         while (millis() - t0 < 1500) {
             int len = udp.parsePacket();
             if (len > 0) {
                 uint8_t buf[64];
                 int n = udp.read(buf, sizeof(buf));
-                if (n > 0 && (buf[0] == 'E' || buf[0] == 'e')) {
-                    foundHost = udp.remoteIP().toString();
-                    foundPort = LYRION_DEFAULT_PORT;
-                    udp.stop();
-                    return true;
+                if (n > 0) {
+                    IPAddress candidate = udp.remoteIP();
+                    uint16_t candidatePort = parseJsonPort(buf, n);
+                    WiFiClient probe;
+                    if (probe.connect(candidate, candidatePort, 180)) {
+                        probe.stop();
+                        foundHost = candidate.toString();
+                        foundPort = candidatePort;
+                        srvLog("[LMS] Discovery via UDP: %s:%u", foundHost.c_str(), foundPort);
+                        udp.stop();
+                        return true;
+                    }
                 }
             }
             delay(30);
@@ -372,63 +408,24 @@ bool squeezeDiscover(String& foundHost, uint16_t& foundPort, uint32_t timeoutMs)
         udp.stop();
     }
 
-    // ── 2. TCP-Portscan im gesamten lokalen Subnetz (nach Subnetzmaske) ──────
-    IPAddress local = WiFi.localIP();
-    IPAddress mask  = WiFi.subnetMask();
-    if (!local || !mask || millis() - t0 >= timeoutMs) return false;
-
-    // Typische Server-Adressen zuerst
-    const int prio[] = {1, 2, 10, 20, 30, 50, 100, 101, 110, 120, 150, 200, 201, 220, 254};
-    WiFiClient c;
-    bool tried[256] = {false};
-    for (int oct : prio) {
-        if (millis() - t0 >= timeoutMs) break;
-        if (oct < 1 || oct > 254) continue;
-        tried[oct] = true;
-        if ((int)local[3] == oct) continue;
-        IPAddress ip(local[0], local[1], local[2], oct);
-        if (c.connect(ip, LYRION_DEFAULT_PORT, 400)) {
-            c.stop();
-            foundHost = ip.toString();
-            foundPort = LYRION_DEFAULT_PORT;
-            return true;
+    // ── 2. mDNS-Fallback (_slimproto._tcp) ──────────────────────────────────
+    if (millis() - t0 < timeoutMs) {
+        static bool mdnsReady = false;
+        if (!mdnsReady) mdnsReady = MDNS.begin("squeezie");
+        int n = MDNS.queryService("slimproto", "tcp");
+        for (int i = 0; i < n; i++) {
+            IPAddress ip = MDNS.IP(i);
+            if (!ip) continue;
+            WiFiClient probe;
+            if (probe.connect(ip, LYRION_DEFAULT_PORT, 220)) {
+                probe.stop();
+                foundHost = ip.toString();
+                foundPort = LYRION_DEFAULT_PORT;
+                srvLog("[LMS] Discovery via mDNS: %s:%u", foundHost.c_str(), foundPort);
+                return true;
+            }
         }
-        c.stop();
     }
-
-    // Danach Subnetz-Maskenbereich vollständig durchlaufen, bis Timeout erreicht ist.
-    uint32_t localU = ((uint32_t)local[0] << 24)
-                    | ((uint32_t)local[1] << 16)
-                    | ((uint32_t)local[2] << 8)
-                    | (uint32_t)local[3];
-    uint32_t maskU  = ((uint32_t)mask[0] << 24)
-                    | ((uint32_t)mask[1] << 16)
-                    | ((uint32_t)mask[2] << 8)
-                    | (uint32_t)mask[3];
-    uint32_t netU   = localU & maskU;
-    uint32_t bcU    = netU | ~maskU;
-    if (bcU <= netU + 1) return false;
-
-    for (uint32_t hostU = netU + 1; hostU < bcU; hostU++) {
-        if (millis() - t0 >= timeoutMs) break;
-        if (hostU == localU) continue;
-        uint8_t lastOct = (uint8_t)(hostU & 0xFF);
-        if (tried[lastOct]
-            && ((hostU >> 8) & 0x00FFFFFF) == ((localU >> 8) & 0x00FFFFFF)) {
-            continue;
-        }
-        IPAddress ip((uint8_t)((hostU >> 24) & 0xFF),
-                     (uint8_t)((hostU >> 16) & 0xFF),
-                     (uint8_t)((hostU >> 8) & 0xFF),
-                     (uint8_t)(hostU & 0xFF));
-        if (c.connect(ip, LYRION_DEFAULT_PORT, 90)) {
-            c.stop();
-            foundHost = ip.toString();
-            foundPort = LYRION_DEFAULT_PORT;
-            return true;
-        }
-        c.stop();
-        delay(1);
-    }
+    srvLog("[LMS] Discovery ohne Treffer beendet.");
     return false;
 }

@@ -114,6 +114,7 @@ extern String   g_settDiscHost;
 extern uint16_t g_settDiscPort;
 extern bool     g_settDiscFound;
 extern bool     g_settSearched;
+extern bool     g_settSearching;
 
 // Scroll-State
 extern int32_t g_scrollOff[3];

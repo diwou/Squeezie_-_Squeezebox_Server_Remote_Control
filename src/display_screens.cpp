@@ -393,7 +393,9 @@ void drawSettingsDiscRow() {
     tft.setTextSize(2);
     tft.setTextColor(COL_WHITE, COL_DARK);
     tft.setCursor(SET_BOX_X + 8, y + 6);
-    if (g_settSearched) {
+    if (g_settSearching) {
+        tft.print("Suche Server...");
+    } else if (g_settSearched) {
         if (g_settDiscFound) {
             tft.print("Gefunden: ");
             tft.print(g_settDiscHost);
@@ -490,17 +492,20 @@ void handleSettingsTouch(int32_t tx, int32_t ty) {
 
     // Server-Reihe antippen → Discovery starten
     if (tx >= SET_BOX_X && tx <= SET_BOX_X + SET_BOX_W && ty >= SET_SRV_Y && ty <= SET_SRV_Y + 30) {
-        if (!g_settSearched) {
-            g_settSearched = true;
+        if (!g_settSearching) {
+            g_settSearching = true;
+            drawSettingsDiscRow();
             String host;
-            uint16_t port;
-            g_settDiscFound = squeezeDiscover(host, port, 5000);
+            uint16_t port = LYRION_DEFAULT_PORT;
+            g_settDiscFound = squeezeDiscover(host, port, 8000);
+            g_settSearched = true;
+            g_settSearching = false;
             if (g_settDiscFound) {
                 g_settDiscHost = host;
                 g_settDiscPort = port;
                 wifiSetServer(host, port);
             }
-            drawSettingsScreen();
+            drawSettingsDiscRow();
         }
         return;
     }

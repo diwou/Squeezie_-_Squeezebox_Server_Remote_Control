@@ -7,6 +7,17 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 ## [Unreleased]
 
 ### Behoben
+- **Serversuche meldete trotz vorhandenem LMS „kein Server gefunden“**: die
+  UDP-Discovery wurde robuster gemacht (vollständigerer Discovery-Request,
+  tolerant gegenüber unterschiedlichen Antwortformaten, Port-Übernahme aus
+  JSON-Feld wenn vorhanden). Zusätzlich validiert die Suche den Antwort-Host
+  direkt per TCP-Connect. [`unreleased`]
+- **Keine sichtbare Such-Rückmeldung im Display**: im Einstellungs-Screen
+  zeigt die Discovery-Zeile während des Suchlaufs jetzt explizit „Suche
+  Server...“ an. [`unreleased`]
+- **Externe Hardware-Tasten erweitert**: zusätzliche GPIO-Belegung für
+  Track zurück/vor, Volume +/-, Mute ergänzt und in die Laufzeitsteuerung
+  eingebunden. [`unreleased`]
 - **Serversuche erkannte vorhandene LMS-Server oft nicht**: der Fallback nach
   UDP-Discovery scannte bisher nur eine kleine Liste fester IP-Endungen. Die
   Suche läuft jetzt als echter Subnetz-Scan mit Timeout und robusterer
