@@ -11,15 +11,15 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
   UDP-Discovery scannte bisher nur eine kleine Liste fester IP-Endungen. Die
   Suche läuft jetzt als echter Subnetz-Scan mit Timeout und robusterer
   UDP-Antworterkennung, damit auch Server auf anderen Host-Adressen gefunden
-  werden. [`id:2026-05-12-discovery-subnet`]
+  werden. [`72f8052`]
 - **Pin-Mapping auf neue Squeezie-Platine korrigiert**: Display- und Touch-
   Leitungen sind jetzt gemäß neuem Schaltplan getrennt konfiguriert (keine
   doppelt belegten SPI-Pins mehr). Die GPIO-Zuordnung in Firmware und README
-  wurde auf den aktuellen Hardwarestand angepasst. [`id:2026-05-12-pin-belegung`]
+  wurde auf den aktuellen Hardwarestand angepasst. [`72f8052`]
 - **Touch auf getrennter Verdrahtung reagierte nicht**: XPT2046 lief noch auf
   dem selben SPI-Host wie das Display. Touch nutzt jetzt einen eigenen
   SPI-Host, passend zur getrennten Display-/Touch-Verdrahtung der neuen
-  Platine. [`id:2026-05-12-touch-spi-host`]
+  Platine. [`72f8052`]
 - **Cover-Downloads konnten sich nach Task-Timeouts festfahren**: abgelaufene
   Cover-Tasks werden jetzt wirklich beendet statt nur aus dem Handle entfernt.
   Zusätzlich prüft der Start des Cover-Tasks nun auf Erzeugungsfehler und geht
