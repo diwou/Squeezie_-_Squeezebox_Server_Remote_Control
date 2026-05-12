@@ -6,7 +6,7 @@ ESP32-S3-basierte Fernsteuerung für einen Lyrion/Squeezebox-Medienserver mit IL
 
 - **Repository**: https://codeberg.org/diwou/Squeezie_-_Squeezebox_Server_Remote_Control
 - **Lizenz**: CC BY-NC-SA 4.0
-- **Version**: Development v0.4.5+6354195
+- **Version**: v0.5.0
 
 ## Hardware
 
@@ -71,7 +71,7 @@ Die Kalibrierungsdaten werden im NVS (Flash) gespeichert und bei jedem Neustart 
 
 **Neu kalibrieren:** Obere linke Ecke des Displays 3 Sekunden gedrückt halten.
 
-## Aktueller Stand — Development v0.4.5+6354195
+## Aktueller Stand — v0.5.0
 
 ### Player-Screen (Touch-Display)
 
@@ -95,10 +95,16 @@ Die Kalibrierungsdaten werden im NVS (Flash) gespeichert und bei jedem Neustart 
 ### Technisches
 
 - **Lyrion/Squeezebox JSON-RPC API**: Play/Pause/Next/Prev/Seek/Lautstärke/Wiederholen/Zufall
-- **Server-Discovery**: UDP-Broadcast auf Port 3483, TCP-Portscan als Fallback
+- **Server-Discovery**: UDP Slim-Discovery auf Port 3483, mDNS-Service-Discovery als Fallback
 - **NVS-Persistenz**: alle Einstellungen überleben einen Neustart
 - **Cover-Download**: asynchroner FreeRTOS-Task (blockiert die Main-Loop nicht)
 - **Selektives Display-Rendering**: nur geänderte Felder werden neu gezeichnet
+
+## Web-Firmware-Installer (Codeberg Page)
+
+Der Firmware-Installer über Browser ist auf der Codeberg-Page verfügbar:
+
+- `https://diwou.codeberg.page/Squeezie_-_Squeezebox_Server_Remote_Control/`
 
 ## Geplante Funktionen
 

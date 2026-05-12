@@ -71,10 +71,10 @@ static void handleHardwareButtons() {
     }
     if (consumeButtonPress(PIN_VOL_UP_BTN, volUpBtn)) {
         wifiBeginUserCommand();
-        bool ok = squeezeAdjustVolume(mac, +5);
+        bool ok = squeezeAdjustVolume(mac, +1);
         if (ok) {
             SqueezieStatus status = squeezieGetCachedStatus();
-            status.volume = constrain(status.volume + 5, 0, 100);
+            status.volume = constrain(status.volume + 1, 0, 100);
             status.muted = false;
             wifiUpdateCachedStatus(status);
             srvLog("[HW] Volume+ Taster ausgelöst.");
@@ -85,10 +85,10 @@ static void handleHardwareButtons() {
     }
     if (consumeButtonPress(PIN_VOL_DN_BTN, volDnBtn)) {
         wifiBeginUserCommand();
-        bool ok = squeezeAdjustVolume(mac, -5);
+        bool ok = squeezeAdjustVolume(mac, -1);
         if (ok) {
             SqueezieStatus status = squeezieGetCachedStatus();
-            status.volume = constrain(status.volume - 5, 0, 100);
+            status.volume = constrain(status.volume - 1, 0, 100);
             status.muted = false;
             wifiUpdateCachedStatus(status);
             srvLog("[HW] Volume- Taster ausgelöst.");

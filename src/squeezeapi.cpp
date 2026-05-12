@@ -6,7 +6,7 @@
 #include <WiFiUdp.h>
 #include <WiFi.h>
 #include <ESPmDNS.h>
-// cspell:ignore slimproto
+// cspell:ignore slimproto EIPA
 
 static String   g_host;
 static uint16_t g_port = LYRION_DEFAULT_PORT;
@@ -358,12 +358,14 @@ bool squeezeDiscover(String& foundHost, uint16_t& foundPort, uint32_t timeoutMs)
     {
         WiFiUDP udp;
         udp.begin(0);
-        const uint8_t pktA[] = {'e','I','P','A'};
-        const uint8_t pktB[] = {
+        const uint8_t pktEIPA[] = {'e','I','P','A'};
+        const uint8_t pktTlv[] = {
             'e','I','P','A','D',0,'N','A','M','E',0,
             'S','q','u','e','e','z','i','e',0,
             'J','S','O','N',0,'V','E','R','S',0,'U','U','I','D',0
         };
+        const uint8_t pktResp[] = {'R','E','S','P'};
+        const uint8_t pktLegacyD[18] = {'d',0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
         IPAddress local = WiFi.localIP();
         IPAddress mask  = WiFi.subnetMask();
         IPAddress bcast(local[0] | (uint8_t)~mask[0],
@@ -371,36 +373,45 @@ bool squeezeDiscover(String& foundHost, uint16_t& foundPort, uint32_t timeoutMs)
                         local[2] | (uint8_t)~mask[2],
                         local[3] | (uint8_t)~mask[3]);
 
-        udp.beginPacket(bcast, 3483);
-        udp.write(pktA, sizeof(pktA));
-        udp.endPacket();
-        udp.beginPacket(bcast, 3483);
-        udp.write(pktB, sizeof(pktB));
-        udp.endPacket();
+        auto sendProbe = [&](const IPAddress& addr, const uint8_t* pkt, size_t len) {
+            udp.beginPacket(addr, 3483);
+            udp.write(pkt, len);
+            udp.endPacket();
+        };
+        sendProbe(bcast, pktEIPA, sizeof(pktEIPA));
+        sendProbe(bcast, pktTlv, sizeof(pktTlv));
+        sendProbe(bcast, pktResp, sizeof(pktResp));
+        sendProbe(bcast, pktLegacyD, sizeof(pktLegacyD));
         // Fallback für Netze, in denen nur 255.255.255.255 geroutet wird.
-        udp.beginPacket(IPAddress(255, 255, 255, 255), 3483);
-        udp.write(pktA, sizeof(pktA));
-        udp.endPacket();
-        udp.beginPacket(IPAddress(255, 255, 255, 255), 3483);
-        udp.write(pktB, sizeof(pktB));
-        udp.endPacket();
-        while (millis() - t0 < 1500) {
+        IPAddress globalBcast(255, 255, 255, 255);
+        sendProbe(globalBcast, pktEIPA, sizeof(pktEIPA));
+        sendProbe(globalBcast, pktTlv, sizeof(pktTlv));
+        sendProbe(globalBcast, pktResp, sizeof(pktResp));
+        sendProbe(globalBcast, pktLegacyD, sizeof(pktLegacyD));
+
+        uint32_t udpWaitMs = timeoutMs;
+        if (udpWaitMs < 1500) udpWaitMs = 1500;
+        if (udpWaitMs > 4000) udpWaitMs = 4000;
+        while (millis() - t0 < udpWaitMs) {
             int len = udp.parsePacket();
             if (len > 0) {
                 uint8_t buf[64];
                 int n = udp.read(buf, sizeof(buf));
                 if (n > 0) {
+                    uint8_t b0 = buf[0];
+                    if (!(b0 == 'E' || b0 == 'e' || b0 == 'D' || b0 == 'd' || b0 == 'R')) {
+                        delay(15);
+                        continue;
+                    }
                     IPAddress candidate = udp.remoteIP();
                     uint16_t candidatePort = parseJsonPort(buf, n);
-                    WiFiClient probe;
-                    if (probe.connect(candidate, candidatePort, 180)) {
-                        probe.stop();
-                        foundHost = candidate.toString();
-                        foundPort = candidatePort;
-                        srvLog("[LMS] Discovery via UDP: %s:%u", foundHost.c_str(), foundPort);
-                        udp.stop();
-                        return true;
-                    }
+                    // Laut Slim-Discovery gilt die UDP-Quell-IP bereits als Server-Treffer.
+                    // Kein zusätzlicher TCP-Probe hier, um Falsch-Negative zu vermeiden.
+                    foundHost = candidate.toString();
+                    foundPort = candidatePort;
+                    srvLog("[LMS] Discovery via UDP: %s:%u", foundHost.c_str(), foundPort);
+                    udp.stop();
+                    return true;
                 }
             }
             delay(30);

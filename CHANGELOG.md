@@ -6,12 +6,22 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-05-12
+
+### Hinzugefügt
+- **Codeberg-Page für Web-Firmware-Upload**: statische Installer-Seite für
+  ESP Web Tools unter `docs/codeberg-pages/index.html` ergänzt, damit
+  Firmware-Updates direkt per Browser aus dem Codeberg-Hosting möglich sind.
+  [`unreleased`]
+
 ### Behoben
+- **Hardware-Lautstärketasten sprangen in zu großen Schritten**: Volume +/-
+  über externe Tasten arbeiten jetzt in 1%-Schritten pro Tastendruck statt in
+  5%-Schritten. [`unreleased`]
 - **Serversuche meldete trotz vorhandenem LMS „kein Server gefunden“**: die
   UDP-Discovery wurde robuster gemacht (vollständigerer Discovery-Request,
   tolerant gegenüber unterschiedlichen Antwortformaten, Port-Übernahme aus
-  JSON-Feld wenn vorhanden). Zusätzlich validiert die Suche den Antwort-Host
-  direkt per TCP-Connect. [`e7324b9`]
+  JSON-Feld wenn vorhanden). [`e7324b9`]
 - **Keine sichtbare Such-Rückmeldung im Display**: im Einstellungs-Screen
   zeigt die Discovery-Zeile während des Suchlaufs jetzt explizit „Suche
   Server...“ an. [`e7324b9`]

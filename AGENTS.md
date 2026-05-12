@@ -27,6 +27,11 @@ Vor jeder Änderung, vor jeder Prüfung und vor jeder Antwort über den Arbeitss
 ## 0.1 Kommunikationsregeln
 
 - Eine klare Arbeitsanweisung wird direkt ausgeführt, nicht erst rückgefragt.
+- Keine eigenmächtigen Produkt- oder Verhaltensentscheidungen treffen, wenn
+  sie nicht ausdrücklich angewiesen sind.
+- Wenn Anforderungen oder gewünschtes Verhalten nicht eindeutig sind, muss vor
+  der Umsetzung eine Rückfrage gestellt werden; Annahmen sind in diesem Fall
+  unzulässig.
 - Am Ende einer erledigten Aufgabe steht eine knappe Umsetzungszusammenfassung, keine Rückfrage und kein Angebot für den nächsten Schritt.
 - Formulierungen wie „wenn du willst“, „ich könnte noch“, „soll ich“ oder ähnliche Zusatzoptionen sind nach einer klaren Anweisung zu vermeiden.
 - Wenn wirklich eine Entscheidung des Nutzers nötig ist, muss das vor der Ausführung begründet und als echte Blockade benannt werden.

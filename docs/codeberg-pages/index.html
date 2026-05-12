@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Squeezie Firmware Web-Installer</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { font-family: system-ui, sans-serif; margin: 0; background:#0e1116; color:#e7edf3; }
+    main { max-width: 760px; margin: 40px auto; padding: 0 16px; }
+    h1 { margin-bottom: 8px; }
+    .card { background:#161b22; border:1px solid #2d333b; border-radius:12px; padding:16px; }
+    a { color:#7cc7ff; }
+    code { background:#1f2937; padding:2px 6px; border-radius:6px; }
+  </style>
+  <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+</head>
+<body>
+<main>
+  <h1>Squeezie Firmware Web-Installer</h1>
+  <p>Firmware direkt aus dem Browser auf den ESP32-S3 installieren oder aktualisieren.</p>
+
+  <div class="card">
+    <p><strong>1.</strong> Squeezie per USB verbinden</p>
+    <p><strong>2.</strong> Chromium-basierten Browser verwenden (Chrome, Edge, Brave, Vivaldi)</p>
+    <p><strong>3.</strong> Install starten:</p>
+    <p>
+      <esp-web-install-button manifest="https://codeberg.org/diwou/Squeezie_-_Squeezebox_Server_Remote_Control/raw/branch/main/Firmware/latest/manifest.json">
+        <button slot="activate">Firmware installieren</button>
+      </esp-web-install-button>
+    </p>
+  </div>
+
+  <p>Manifest: <a href="https://codeberg.org/diwou/Squeezie_-_Squeezebox_Server_Remote_Control/raw/branch/main/Firmware/latest/manifest.json">Firmware/latest/manifest.json</a></p>
+  <p>Repository: <a href="https://codeberg.org/diwou/Squeezie_-_Squeezebox_Server_Remote_Control">Codeberg</a></p>
+</main>
+</body>
+</html>

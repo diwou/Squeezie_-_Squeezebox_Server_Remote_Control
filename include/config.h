@@ -5,7 +5,7 @@
 // =============================================================================
 
 // --- Anwendung ---
-#define APP_VERSION_BASE "0.4.5"
+#define APP_VERSION_BASE "0.5.0"
 #if __has_include("version_generated.h")
 #include "version_generated.h"
 #endif
