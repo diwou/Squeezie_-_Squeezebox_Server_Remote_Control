@@ -2,6 +2,8 @@
 
 ESP32-S3-basierte Fernsteuerung für einen Lyrion/Squeezebox-Medienserver mit ILI9488 3,5" Touchdisplay.
 
+![Squeezie Projekt](images/Squeezie%20Projekt.jpg)
+
 ## Projekt-Metadaten
 
 - **Repository**: https://codeberg.org/diwou/Squeezie_-_Squeezebox_Server_Remote_Control
@@ -15,6 +17,10 @@ ESP32-S3-basierte Fernsteuerung für einen Lyrion/Squeezebox-Medienserver mit IL
 | Mikrocontroller | ESP32-S3-WROOM1-N16R8 (16 MB Flash, 8 MB PSRAM) |
 | Display | TN 3,5" ILI9488 SPI-TFT 480×320 |
 | Touch | XPT2046 (auf Display-Modul integriert) |
+
+### Platine
+
+![Squeezie Platine](images/Squeezie-Platine.jpg)
 
 ## Verkabelung
 
@@ -73,6 +79,8 @@ Die Kalibrierungsdaten werden im NVS (Flash) gespeichert und bei jedem Neustart 
 
 ## Aktueller Stand — v0.5.0
 
+![Squeezie System](images/Squeezie-System.jpg)
+
 ### Player-Screen (Touch-Display)
 
 - **Cover-Art** (128×128 px, vom LMS-Server geladen)
@@ -104,7 +112,7 @@ Die Kalibrierungsdaten werden im NVS (Flash) gespeichert und bei jedem Neustart 
 
 Der Firmware-Installer über Browser ist auf der Codeberg-Page verfügbar:
 
-- `https://diwou.codeberg.page/Squeezie_-_Squeezebox_Server_Remote_Control/`
+- [Web-Installer öffnen](https://diwou.codeberg.page/Squeezie_-_Squeezebox_Server_Remote_Control/)
 
 ## Geplante Funktionen
 
