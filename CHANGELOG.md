@@ -12,12 +12,12 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 - **Codeberg-Page für Web-Firmware-Upload**: statische Installer-Seite für
   ESP Web Tools unter `docs/codeberg-pages/index.html` ergänzt, damit
   Firmware-Updates direkt per Browser aus dem Codeberg-Hosting möglich sind.
-  [`unreleased`]
+  [`c7ae973`]
 
 ### Behoben
 - **Hardware-Lautstärketasten sprangen in zu großen Schritten**: Volume +/-
   über externe Tasten arbeiten jetzt in 1%-Schritten pro Tastendruck statt in
-  5%-Schritten. [`unreleased`]
+  5%-Schritten. [`c7ae973`]
 - **Serversuche meldete trotz vorhandenem LMS „kein Server gefunden“**: die
   UDP-Discovery wurde robuster gemacht (vollständigerer Discovery-Request,
   tolerant gegenüber unterschiedlichen Antwortformaten, Port-Übernahme aus
@@ -60,7 +60,7 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
   512er-Cover serverseitig vom LMS und liefert es direkt aus der eigenen
   Origin aus. Damit verschwinden Redirect-/Cross-Site-Probleme und der Browser
   sieht den Cover-Wechsel wieder ohne `CTRL+F5`. `api/cover` bleibt
-  ausschließlich für das Display. [`unreleased`]
+  ausschließlich für das Display. [`c7ae973`]
 - **Browser-Cover jetzt in 512×512 über `/api/cover-large`**: Die Weboberfläche
   nutzt nur noch den großen Pfad; `browserCoverUrl()` liefert einen
   Cache-Busting-URL mit eigener Seriennummer, und `/api/cover-large` liefert
