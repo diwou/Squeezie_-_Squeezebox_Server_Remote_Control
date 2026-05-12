@@ -10,7 +10,7 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 - **README und Web-Installer um Projektbilder ergänzt**: Projektansicht,
   Platinenfoto und Systemfoto dokumentieren jetzt den Hardwarestand direkt
   in der README; der Codeberg-Web-Installer zeigt zusätzlich das Projektbild.
-  [`unreleased`]
+  [`558fd34`]
 
 ## [0.5.0] — 2026-05-12
 
