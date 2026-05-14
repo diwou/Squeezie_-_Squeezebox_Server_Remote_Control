@@ -11,10 +11,6 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
   Platinenfoto und Systemfoto dokumentieren jetzt den Hardwarestand direkt
   in der README; der Codeberg-Web-Installer zeigt zusätzlich das Projektbild.
   [`558fd34`]
-- **AGENTS.md aus Versionskontrolle entfernt**: `AGENTS.md` bleibt lokal als
-  Arbeitsanweisung erhalten, wird aber nicht mehr im Repository verfolgt und
-  damit auf Codeberg gelöscht; `.gitignore` enthält den Eintrag bereits.
-  [`ID: untrack-agents-md-2026-05-14`]
 
 ## [0.5.0] — 2026-05-12
 
