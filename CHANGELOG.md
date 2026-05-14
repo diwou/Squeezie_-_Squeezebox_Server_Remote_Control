@@ -8,7 +8,7 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 
 ### Geändert
 - **README und Web-Installer um Projektbilder ergänzt**: Projektansicht,
-  Platinenfoto und Systemfoto dokumentieren jetzt den Hardwarestand direkt
+  Platinenfotos und Systemfoto dokumentieren jetzt den Hardwarestand direkt
   in der README; der Codeberg-Web-Installer zeigt zusätzlich das Projektbild.
   [`558fd34`]
 
