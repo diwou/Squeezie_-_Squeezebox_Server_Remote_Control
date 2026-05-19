@@ -13,7 +13,7 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
   Lauftext nutzt jetzt getrennte, persistent wiederverwendete Sprites für
   große und kleine Zeilen, um Heap-Fragmentierung und daraus entstehendes
   Flackern nach mehreren Tagen Laufzeit zu vermeiden.
-  [`WIP-2026-05-19-scroll-flicker`]
+  [`f4b39f7`]
 
 ### Geändert
 - **README und Web-Installer um Projektbilder ergänzt**: Projektansicht,
@@ -23,7 +23,7 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 - **Webinterface zeigt jetzt die Geräte-Uptime**: In der oberen Statusleiste
   wird die laufende Betriebsdauer angezeigt, um Langzeitprobleme wie
   Lauftext-Flackern zeitlich besser eingrenzen zu können.
-  [`WIP-2026-05-19-web-uptime`]
+  [`f4b39f7`]
 
 ## [0.5.0] — 2026-05-12
 
