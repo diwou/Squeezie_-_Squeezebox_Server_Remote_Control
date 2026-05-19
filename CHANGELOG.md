@@ -12,7 +12,7 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
   Player-ID weitergereicht werden, wodurch ungültige `slim.request`-Bodies
   entstanden (`JSONRPC.pm line 146`). JSON-RPC-Requests werden jetzt strukturiert
   serialisiert und Sync-Mitglieder strikt auf gültige MAC-Adressen gefiltert.
-  [`WIP-2026-05-19-lms-jsonrpc-fix`]
+  [`bb3016c`]
 - **Lauftext-Flackern nach langen Laufzeiten reduziert**: Die Player-Info
   verwendete zuvor ein gemeinsames Scroll-Sprite mit wechselnder Höhe, wodurch
   pro Tick wiederholt `deleteSprite/createSprite` ausgelöst wurde. Der
