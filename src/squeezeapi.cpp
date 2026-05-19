@@ -34,6 +34,17 @@ uint16_t squeezeGetPort() { return g_port; }
 static bool jsonRpc(const String& playerMac, const String& cmdJson, JsonDocument& resp,
                     uint32_t timeoutMs = 1200) {
     if (g_host.isEmpty()) return false;
+    JsonDocument request;
+    request["id"] = 1;
+    request["method"] = "slim.request";
+    JsonArray params = request["params"].to<JsonArray>();
+    params.add(playerMac);
+    JsonArray cmdArray = params.add<JsonArray>();
+    JsonDocument cmdDoc;
+    if (deserializeJson(cmdDoc, cmdJson)) return false;
+    if (!cmdDoc.is<JsonArray>()) return false;
+    for (JsonVariantConst item : cmdDoc.as<JsonArrayConst>()) cmdArray.add(item);
+
     HTTPClient http;
     String url;
     url.reserve(g_host.length() + cmdJson.length() + playerMac.length() + 32);
@@ -46,12 +57,8 @@ static bool jsonRpc(const String& playerMac, const String& cmdJson, JsonDocument
     http.addHeader("Content-Type", "application/json");
     http.setTimeout(timeoutMs);
     String body;
-    body.reserve(playerMac.length() + cmdJson.length() + 64);
-    body = "{\"id\":1,\"method\":\"slim.request\",\"params\":[\"";
-    body += playerMac;
-    body += "\",";
-    body += cmdJson;
-    body += "]}";
+    body.reserve(playerMac.length() + cmdJson.length() + 96);
+    serializeJson(request, body);
     int code = http.POST(body);
     if (code != 200) { http.end(); return false; }
     WiFiClient* stream = http.getStreamPtr();
@@ -103,14 +110,37 @@ static void addUniqueString(std::vector<String>& out, const String& value) {
     out.push_back(value);
 }
 
+static bool isLikelyMacAddress(const String& value) {
+    if (value.length() != 17) return false;
+    for (int i = 0; i < 17; ++i) {
+        char c = value[i];
+        if ((i % 3) == 2) {
+            if (c != ':') return false;
+            continue;
+        }
+        bool hex = (c >= '0' && c <= '9')
+                || (c >= 'a' && c <= 'f')
+                || (c >= 'A' && c <= 'F');
+        if (!hex) return false;
+    }
+    return true;
+}
+
+static void addUniqueMac(std::vector<String>& out, const String& value) {
+    String mac = value;
+    mac.trim();
+    if (!isLikelyMacAddress(mac)) return;
+    mac.toLowerCase();
+    addUniqueString(out, mac);
+}
+
 static void appendCsvStrings(const String& csv, std::vector<String>& out) {
     int start = 0;
     while (start < csv.length()) {
         int comma = csv.indexOf(',', start);
         if (comma < 0) comma = csv.length();
         String item = csv.substring(start, comma);
-        item.trim();
-        addUniqueString(out, item);
+        addUniqueMac(out, item);
         start = comma + 1;
     }
 }
@@ -181,7 +211,7 @@ bool squeezeGetPlayers(std::vector<SqueeziePlayer>& out) {
 
 bool squeezeGetSyncGroupMembers(const String& playerMac, std::vector<String>& out) {
     out.clear();
-    addUniqueString(out, playerMac);
+    addUniqueMac(out, playerMac);
     if (playerMac.isEmpty()) return false;
 
     JsonDocument resp;

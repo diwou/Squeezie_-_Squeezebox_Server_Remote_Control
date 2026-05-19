@@ -7,6 +7,12 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 ## [Unreleased]
 
 ### Behoben
+- **LMS-Fehlerprotokoll durch fehlerhafte JSON-RPC-Requests bereinigt**: Beim
+  Sync-Volume-Pfad konnten aus Sync-Antworten versehentlich JSON-Fragmente als
+  Player-ID weitergereicht werden, wodurch ungültige `slim.request`-Bodies
+  entstanden (`JSONRPC.pm line 146`). JSON-RPC-Requests werden jetzt strukturiert
+  serialisiert und Sync-Mitglieder strikt auf gültige MAC-Adressen gefiltert.
+  [`WIP-2026-05-19-lms-jsonrpc-fix`]
 - **Lauftext-Flackern nach langen Laufzeiten reduziert**: Die Player-Info
   verwendete zuvor ein gemeinsames Scroll-Sprite mit wechselnder Höhe, wodurch
   pro Tick wiederholt `deleteSprite/createSprite` ausgelöst wurde. Der
