@@ -153,7 +153,8 @@ void drawPlayerScrollLine(const char* txt, int16_t x, int16_t y, int16_t w,
                           uint32_t color, uint8_t size, int32_t offset, bool bold) {
     setPlayerInfoFont(size);
     int lh = tft.fontHeight() + 4;
-    if (!ensureInfoLineSprite(lh)) {
+    LGFX_Sprite& infoSprite = (size >= 3) ? g_infoLineSpriteBig : g_infoLineSpriteSmall;
+    if (!ensureInfoLineSprite(infoSprite, lh)) {
         tft.setTextDatum(TL_DATUM);
         tft.setTextColor(color, COL_BG);
         tft.setClipRect(x, y, w, lh);
@@ -173,24 +174,24 @@ void drawPlayerScrollLine(const char* txt, int16_t x, int16_t y, int16_t w,
         tft.clearClipRect();
         return;
     }
-    g_infoLineSprite.fillSprite(COL_BG);
-    g_infoLineSprite.setFont(tft.getFont());
-    g_infoLineSprite.setTextSize(1);
-    g_infoLineSprite.setTextDatum(TL_DATUM);
-    g_infoLineSprite.setTextColor(color, COL_BG);
+    infoSprite.fillSprite(COL_BG);
+    infoSprite.setFont(tft.getFont());
+    infoSprite.setTextSize(1);
+    infoSprite.setTextDatum(TL_DATUM);
+    infoSprite.setTextColor(color, COL_BG);
     if (!txt || !txt[0]) {
-        g_infoLineSprite.pushSprite(x, y);
+        infoSprite.pushSprite(x, y);
         return;
     }
-    int tw = g_infoLineSprite.textWidth(txt);
+    int tw = infoSprite.textWidth(txt);
     if (tw + 4 <= w || offset == 0) {
-        g_infoLineSprite.drawString(txt, 2, 2);
-        if (bold) g_infoLineSprite.drawString(txt, 3, 2);
+        infoSprite.drawString(txt, 2, 2);
+        if (bold) infoSprite.drawString(txt, 3, 2);
     } else {
-        g_infoLineSprite.drawString(txt, 2 - offset, 2);
-        if (bold) g_infoLineSprite.drawString(txt, 3 - offset, 2);
+        infoSprite.drawString(txt, 2 - offset, 2);
+        if (bold) infoSprite.drawString(txt, 3 - offset, 2);
     }
-    g_infoLineSprite.pushSprite(x, y);
+    infoSprite.pushSprite(x, y);
 }
 
 // ─── UTF-8 → ASCII ──────────────────────────────────────────────────────────
@@ -262,12 +263,12 @@ int getPlayerInfoLineHeight(uint8_t size) {
     return tft.fontHeight() + 4;
 }
 
-bool ensureInfoLineSprite(int height) {
+bool ensureInfoLineSprite(LGFX_Sprite& sprite, int height) {
     if (height <= 0) return false;
-    if (g_infoLineSprite.width() == PL_INFO_W && g_infoLineSprite.height() == height) return true;
-    g_infoLineSprite.deleteSprite();
-    g_infoLineSprite.setColorDepth(16);
-    return g_infoLineSprite.createSprite(PL_INFO_W, height);
+    if (sprite.width() == PL_INFO_W && sprite.height() == height) return true;
+    if (sprite.width() > 0 && sprite.height() > 0) sprite.deleteSprite();
+    sprite.setColorDepth(16);
+    return sprite.createSprite(PL_INFO_W, height);
 }
 
 // ─── Player-Screen Komponenten ───────────────────────────────────────────────

@@ -119,7 +119,8 @@ extern bool     g_settSearching;
 // Scroll-State
 extern int32_t g_scrollOff[3];
 extern uint32_t g_scrollLast;
-extern LGFX_Sprite g_infoLineSprite;
+extern LGFX_Sprite g_infoLineSpriteBig;
+extern LGFX_Sprite g_infoLineSpriteSmall;
 
 // Cover-Puffer (PSRAM) und Download-State
 extern uint8_t*          g_coverBuf;
@@ -180,7 +181,7 @@ void     drawModeRow(int repeat, int shuffle);
 String   utf8ToAscii(const String& src);
 void     setPlayerInfoFont(uint8_t size);
 int      getPlayerInfoLineHeight(uint8_t size);
-bool     ensureInfoLineSprite(int height);
+bool     ensureInfoLineSprite(LGFX_Sprite& sprite, int height);
 
 // display_touch.cpp
 bool     xpt2046ReadRaw(int32_t* rx, int32_t* ry);

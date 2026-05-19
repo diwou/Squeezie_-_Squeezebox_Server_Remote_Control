@@ -6,11 +6,24 @@ und dieses Projekt verwendet [Semantische Versionierung](https://semver.org/lang
 
 ## [Unreleased]
 
+### Behoben
+- **Lauftext-Flackern nach langen Laufzeiten reduziert**: Die Player-Info
+  verwendete zuvor ein gemeinsames Scroll-Sprite mit wechselnder Höhe, wodurch
+  pro Tick wiederholt `deleteSprite/createSprite` ausgelöst wurde. Der
+  Lauftext nutzt jetzt getrennte, persistent wiederverwendete Sprites für
+  große und kleine Zeilen, um Heap-Fragmentierung und daraus entstehendes
+  Flackern nach mehreren Tagen Laufzeit zu vermeiden.
+  [`WIP-2026-05-19-scroll-flicker`]
+
 ### Geändert
 - **README und Web-Installer um Projektbilder ergänzt**: Projektansicht,
   Platinenfotos und Systemfoto dokumentieren jetzt den Hardwarestand direkt
   in der README; der Codeberg-Web-Installer zeigt zusätzlich das Projektbild.
   [`558fd34`]
+- **Webinterface zeigt jetzt die Geräte-Uptime**: In der oberen Statusleiste
+  wird die laufende Betriebsdauer angezeigt, um Langzeitprobleme wie
+  Lauftext-Flackern zeitlich besser eingrenzen zu können.
+  [`WIP-2026-05-19-web-uptime`]
 
 ## [0.5.0] — 2026-05-12
 

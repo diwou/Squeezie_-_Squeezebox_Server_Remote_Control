@@ -11,6 +11,7 @@
 #include <Update.h>
 #include <ArduinoOTA.h>
 #include <esp_task_wdt.h>
+#include <esp_timer.h>
 #include <time.h>
 #include <stdarg.h>
 #include <vector>
@@ -70,6 +71,10 @@ static String             g_webLoadedCoverKey;
 static volatile uint32_t  g_webCoverRetryAt = 0;
 static volatile uint32_t  g_webCoverTaskStartedAt = 0;
 static volatile uint32_t  g_webCoverSerial = 0;
+
+static uint64_t uptimeSeconds() {
+    return (uint64_t)(esp_timer_get_time() / 1000000ULL);
+}
 
 // ─── Konfigurationsstrukturen ────────────────────────────────────────────────
 
@@ -375,6 +380,7 @@ body{display:flex;flex-direction:column;min-height:100vh;max-width:560px;margin:
 <div id=sb>
   <span id=sb-t>--:--</span>
   <span id=sb-p>&mdash;</span>
+  <span id=sb-up>Uptime 0:00:00</span>
   <a href=/settings style="color:#888;font-size:1em;letter-spacing:.5px">EINST.</a>
 </div>
 <div id=notice></div>
@@ -438,6 +444,14 @@ var dur=0,prevCover='__COVER_URL__',volTimer=null,volMuted=false;
 var RPT=['Wiederholen: aus','Wiederholen: Titel','Wiederholen: Playlist'];
 var SHF=['Zufall: aus','Zufall: Titel','Zufall: Alben'];
 function fmt(s){s=Math.round(s);return Math.floor(s/60)+':'+(s%60<10?'0':'')+s%60;}
+function fmtUp(sec){
+  sec=Math.max(0,Math.floor(sec||0));
+  var d=Math.floor(sec/86400);
+  var h=Math.floor((sec%86400)/3600);
+  var m=Math.floor((sec%3600)/60);
+  var s=sec%60;
+  return (d>0?d+'d ':'')+h.toString().padStart(2,'0')+':'+m.toString().padStart(2,'0')+':'+s.toString().padStart(2,'0');
+}
 function txt(id,val){var e=document.getElementById(id);if(e&&e.textContent!==val)e.textContent=val;}
 function cls(id,val){var e=document.getElementById(id);if(e&&e.className!==val)e.className=val;}
 function vis(id,show){var e=document.getElementById(id);if(e)e.style.display=show?'':'none';}
@@ -488,6 +502,7 @@ function upd(d){
   cls('bsh','mode-btn'+(d.shuffleMode?' on':''));
   txt('shf-lbl',SHF[d.shuffleMode||0]);
   txt('sb-p',d.playerName||'\u2014');
+  txt('sb-up','Uptime '+fmtUp(d.uptimeSec));
 }
 function poll(){
   fetch('/api/status').then(function(r){return r.json();}).then(upd).catch(function(){});
@@ -944,6 +959,7 @@ static String statusToJson() {
     doc["playerName"] = s.playerName;
     doc["coverUrl"]   = browserCoverUrl(coverV);
     doc["connected"]  = (g_wifiState == WIFI_STATE_CONNECTED);
+    doc["uptimeSec"]  = (uint32_t)uptimeSeconds();
     String out; serializeJson(doc, out);
     return out;
 }

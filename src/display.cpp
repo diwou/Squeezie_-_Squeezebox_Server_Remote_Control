@@ -49,7 +49,8 @@ bool     g_settSearching = false;
 // ─── Scroll-State ────────────────────────────────────────────────────────────
 int32_t g_scrollOff[3]   = {0, 0, 0};
 uint32_t g_scrollLast    = 0;
-LGFX_Sprite g_infoLineSprite(&tft);
+LGFX_Sprite g_infoLineSpriteBig(&tft);
+LGFX_Sprite g_infoLineSpriteSmall(&tft);
 
 // ─── Cover-Puffer (PSRAM) und Download-State ─────────────────────────────────
 uint8_t*          g_coverBuf      = nullptr;
